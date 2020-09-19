@@ -20,9 +20,10 @@ assert() {
 
 assert 0 0
 assert 42 42
-assert 5 "2+3"
-assert 5 "8-3"
-assert 9 "10+3-4"
+assert 5 '2+3'
+assert 5 '8-3'
+assert 9 '10+3-4'
+assert 41 ' 12 + 34 - 5 '
 
 
 echo OK

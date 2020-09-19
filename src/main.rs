@@ -18,18 +18,23 @@ impl Lexer {
         }
     }
 
+    // codeのpos番目の文字を取得
     fn getc(&self) -> Option<&char> {
         self.code.get(self.pos)
     }
 
+    // posを1つ進める
     fn next_pos(&mut self) {
         self.pos += 1;
     }
 
+    // posがcodeの最後の示しているか
     fn is_last(&self) -> bool {
         self.code.len() == self.pos
     }
 
+    // 12+34があったら12までをi64に変換し、
+    // posを進める。posは+の位置になる
     fn strtol(&mut self) -> Option<i64> {
         let mut s = String::new();
         while let Some(c) = self.code.get(self.pos) {
@@ -45,6 +50,66 @@ impl Lexer {
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum TokenKind {
+    TkReserved,
+    TkNum,
+    TkEof,
+}
+
+#[derive(Debug)]
+struct Token {
+    kind: TokenKind,    // Kind of Token
+    val : Option<i64>,          // Number literal
+    s   : Option<String>,       // String of Token
+}
+
+fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
+    let mut tokens = vec![];
+    while !lexer.is_last() {
+        // Skip whitespace characters.
+        if lexer.getc().unwrap().is_whitespace() {
+            lexer.next_pos();
+            continue;
+        }
+
+        // Numeric literal
+        if lexer.getc().unwrap().is_ascii_digit() {
+            let kind = TokenKind::TkNum;
+            let p = lexer.pos;
+            let val = Some(lexer.strtol().unwrap());
+            let s = Some(lexer.code[p..lexer.pos].iter().collect());
+            let token = Token { kind, val, s };
+            tokens.push(token);
+            continue;
+        }
+
+        // Punctuator
+        if lexer.getc().unwrap() == &'+' || lexer.getc().unwrap() == &'-' {
+            let token = Token {
+                kind: TokenKind::TkReserved,
+                val : None,
+                s   : Some(lexer.getc().unwrap().to_string()),
+            };
+            lexer.next_pos();
+            tokens.push(token);
+            continue;
+        }
+
+        eprintln!("invalid token");
+
+    }
+
+    tokens.push(Token {
+        kind: TokenKind::TkEof,
+        val : None,
+        s   : None,
+    });
+
+    return tokens;
+
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -54,31 +119,32 @@ fn main() {
     }
 
     let mut lexer = Lexer::new(&args[1]);
-
+    let tokens = tokenize(&mut lexer);
+    let mut tok_pos = 0;
 
     println!(".intel_syntax noprefix");
     println!(".globl main");
     println!("main:");
 
-    println!("  mov rax, {}", lexer.strtol().unwrap());
+    println!("  mov rax, {}", tokens[tok_pos].val.unwrap());
+    tok_pos += 1;
 
-    while !lexer.is_last() {
-        let c = lexer.getc().unwrap();
+    while tokens[tok_pos].kind != TokenKind::TkEof {
 
-        if c == &'+' {
-            lexer.next_pos();
-            println!("  add rax, {}", lexer.strtol().unwrap());
+        if tokens[tok_pos].s.as_ref().unwrap() == "+" {
+            println!("  add rax, {}", tokens[tok_pos+1].val.unwrap());
+            tok_pos += 2;
             continue;
         }
 
-        if c == &'-' {
-            lexer.next_pos();
-            println!("  sub rax, {}", lexer.strtol().unwrap());
+        if tokens[tok_pos].s.as_ref().unwrap() == "-" {
+            println!("  sub rax, {}", tokens[tok_pos+1].val.unwrap());
+            tok_pos += 2;
             continue;
         }
 
-        eprintln!("unexpected charater: {}", c);
-        return;
+        eprintln!("unexpected charater: {:?}", tokens[tok_pos]);
+        process::exit(1);
     }
 
     println!("  ret");
