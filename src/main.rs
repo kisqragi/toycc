@@ -62,6 +62,21 @@ struct Token {
     kind: TokenKind,    // Kind of Token
     val : Option<i64>,          // Number literal
     s   : Option<String>,       // String of Token
+    loc : usize,
+}
+
+fn error_at(lexer: &Lexer, pos: usize, s: String) {
+    for c in lexer.code.iter() {
+        print!("{}", c);
+    }
+    println!();
+
+    for _ in 0..pos {
+        print!(" ");
+    }
+    print!("^ ");
+    println!("{}", s);
+    process::exit(1);
 }
 
 fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
@@ -76,10 +91,10 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
         // Numeric literal
         if lexer.getc().unwrap().is_ascii_digit() {
             let kind = TokenKind::TkNum;
-            let p = lexer.pos;
+            let loc = lexer.pos;
             let val = Some(lexer.strtol().unwrap());
-            let s = Some(lexer.code[p..lexer.pos].iter().collect());
-            let token = Token { kind, val, s };
+            let s = Some(lexer.code[loc..lexer.pos].iter().collect());
+            let token = Token { kind, val, s, loc };
             tokens.push(token);
             continue;
         }
@@ -90,13 +105,14 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
                 kind: TokenKind::TkReserved,
                 val : None,
                 s   : Some(lexer.getc().unwrap().to_string()),
+                loc : lexer.pos,
             };
             lexer.next_pos();
             tokens.push(token);
             continue;
         }
 
-        eprintln!("invalid token");
+        error_at(lexer, lexer.pos, "invalid token".to_string());
 
     }
 
@@ -104,6 +120,7 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
         kind: TokenKind::TkEof,
         val : None,
         s   : None,
+        loc : lexer.pos,
     });
 
     return tokens;
