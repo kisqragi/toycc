@@ -87,6 +87,23 @@ fn ispunct(c: &char) -> bool {
     }
 }
 
+fn is_alpha(c: &char) -> bool {
+    return ('a' <= *c && *c <= 'z') || ('A' <= *c && *c <= 'Z') || *c == '_';
+}
+
+fn is_alnum(c: &char) -> bool {
+    return is_alpha(&c) || ('0' <= *c && *c <= '9');
+}
+
+fn startswith(vc: &[char], s: &str) -> bool {
+    for i in 0..s.len() {
+        if vc.get(i).unwrap() != &s.chars().nth(i).unwrap() {
+            return false;
+        }
+    }
+    true
+}
+
 pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
     let mut tokens = vec![];
     while !lexer.is_last() {
@@ -104,6 +121,20 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
             let val = lexer.strtol().unwrap();
             let s = lexer.code[loc..lexer.pos].iter().collect();
             let token = Token { kind, val, s, loc };
+            tokens.push(token);
+            continue;
+        }
+
+        // Keywords
+        if startswith(&lexer.code[lexer.pos..], "return") && !is_alnum(lexer.code.get(lexer.pos+6).unwrap()) {
+            let s: String = lexer.code[lexer.pos..(lexer.pos+6)].iter().collect();
+            let token = Token {
+                kind: TokenKind::Reserved,
+                val : 0,
+                s,
+                loc : lexer.pos,
+            };
+            lexer.next_pos(6);
             tokens.push(token);
             continue;
         }

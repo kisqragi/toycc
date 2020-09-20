@@ -63,10 +63,17 @@ fn gen_expr(node: Node) {
 
 fn gen_stmt(node: Node) {
     match node.kind {
+        NodeKind::Return => {
+            gen_expr(*node.lhs.unwrap());
+            unsafe {
+                CUR -= 1;
+                println!("  mov rax, {}", reg(CUR));
+            }
+            println!("  jmp .L.return");
+        }
         NodeKind::ExprStmt => {
             gen_expr(*node.lhs.unwrap());
             unsafe {
-                println!("  mov rax, {}", reg(CUR-1));
                 CUR -= 1;
             }
         }
@@ -89,6 +96,7 @@ pub fn codegen(nodes: Vec<Node>) {
         gen_stmt(n);
     }
 
+    println!(".L.return:");
     println!("  pop r15");
     println!("  pop r14");
     println!("  pop r13");

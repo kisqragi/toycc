@@ -12,6 +12,7 @@ pub enum NodeKind {
     Lt,         // <
     Le,         // <=
     ExprStmt,   // Expression statement
+    Return,     // Return statement
 }
 
 #[derive(Debug)]
@@ -58,8 +59,15 @@ fn number(tokens: &Vec<Token>, pos: usize) -> Node {
     panic!("number expected, but got {}", tokens[pos].s);
 }
 
-// stmt = expr-stmt
+// stmt = "return" expr ";"
+//      | expr-stmt
 fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+    if tokens[pos].s == "return" {
+        let (lhs, mut p) = expr(&tokens, pos+1);
+        let node = new_unary(NodeKind::Return, Box::new(lhs));
+        p = skip(&tokens[p].s, ";", p);
+        return (node, p);
+    }
     expr_stmt(&tokens, pos)
 }
 
