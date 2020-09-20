@@ -25,9 +25,9 @@ impl Lexer {
         self.code.get(self.pos)
     }
 
-    // posを1つ進める
-    fn next_pos(&mut self) {
-        self.pos += 1;
+    // posをn進める
+    fn next_pos(&mut self, n: usize) {
+        self.pos += n;
     }
 
     // posがcodeの最後の示しているか
@@ -69,11 +69,15 @@ struct Token {
 
 #[derive(Debug, PartialEq)]
 enum NodeKind {
-    Num,
-    Add,
-    Sub,
-    Mul,
-    Div,
+    Num,    // Integer
+    Add,    // +
+    Sub,    // -
+    Mul,    // *
+    Div,    // /
+    Equal,  // ==
+    Ne,     // !=
+    Lt,     // <
+    Le,     // <=
 }
 
 #[derive(Debug)]
@@ -113,6 +117,86 @@ impl Node {
 
     // expr = mul ("+" mul | "-" mul)*
     fn expr(tokens: &Vec<Token>, pos: usize) -> (Self, usize) {
+        Self::equality(&tokens, pos)
+    }
+
+    // equality = relational ("==" relational | "!=" relational)*
+    fn equality(tokens: &Vec<Token>, pos: usize) -> (Self, usize) {
+        let (mut node, mut pos) = Self::relational(&tokens, pos);
+
+        loop {
+
+            if tokens.len() == pos {
+                return (node, pos);
+            }
+            let op = &tokens[pos].s;
+
+            if op == "==" {
+                let (rhs, p) = Self::relational(&tokens, pos+1);
+                node = Self::new_binary(NodeKind::Equal, Box::new(node), Box::new(rhs));
+                pos = p;
+                continue;
+            }
+
+            if op == "!=" {
+                let (rhs, p) = Self::relational(&tokens, pos+1);
+                node = Self::new_binary(NodeKind::Ne, Box::new(node), Box::new(rhs));
+                pos = p;
+                continue;
+            }
+
+            return (node, pos);
+        }
+ 
+    }
+
+    // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+    fn relational(tokens: &Vec<Token>, pos: usize) -> (Self, usize) {
+        let (mut node, mut pos) = Self::add(&tokens, pos);
+
+        loop {
+
+            if tokens.len() == pos {
+                return (node, pos);
+            }
+            let op = &tokens[pos].s;
+
+            if op == "<" {
+                let (rhs, p) = Self::add(&tokens, pos+1);
+                node = Self::new_binary(NodeKind::Lt, Box::new(node), Box::new(rhs));
+                pos = p;
+                continue;
+            }
+
+            if op == "<=" {
+                let (rhs, p) = Self::add(&tokens, pos+1);
+                node = Self::new_binary(NodeKind::Le, Box::new(node), Box::new(rhs));
+                pos = p;
+                continue;
+            }
+
+            if op == ">" {
+                let (rhs, p) = Self::add(&tokens, pos+1);
+                node = Self::new_binary(NodeKind::Lt, Box::new(rhs), Box::new(node));
+                pos = p;
+                continue;
+            }
+
+            if op == ">=" {
+                let (rhs, p) = Self::add(&tokens, pos+1);
+                node = Self::new_binary(NodeKind::Le, Box::new(rhs), Box::new(node));
+                pos = p;
+                continue;
+            }
+
+
+            return (node, pos);
+        }
+ 
+    }
+    
+    // add = mul ("+" mul | "-" mul)*
+    fn add(tokens: &Vec<Token>, pos: usize) -> (Self, usize) {
         let (mut node, mut pos) = Self::mul(&tokens, pos);
 
         loop {
@@ -257,6 +341,26 @@ impl Node {
                 println!("  idiv {}", rs);
                 println!("  mov {}, rax", rd);
             }
+            NodeKind::Equal => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  sete al");
+                println!("  movzb {}, al", rd);
+            }
+            NodeKind::Ne => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  setne al");
+                println!("  movzb {}, al", rd);
+            }
+            NodeKind::Lt => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  setl al");
+                println!("  movzb {}, al", rd);
+            }
+            NodeKind::Le => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  setle al");
+                println!("  movzb {}, al", rd);
+            }
             _ => panic!("invalid expression")
         }
     }
@@ -282,7 +386,7 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
         let c = lexer.getc().unwrap();
         // Skip whitespace characters.
         if c.is_whitespace() {
-            lexer.next_pos();
+            lexer.next_pos(1);
             continue;
         }
 
@@ -297,15 +401,31 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
             continue;
         }
 
+        // Multi-letter punctuators
+        // ==, !=, <= and >=
+        if (c == &'=' || c == &'!' || c == &'>' || c == &'<') && lexer.code[lexer.pos+1] == '=' {
+            let s: String = lexer.code[lexer.pos..(lexer.pos+2)].iter().collect();
+            let token = Token {
+                kind: TokenKind::Reserved,
+                val : 0,
+                s,
+                loc : lexer.pos,
+            };
+            lexer.next_pos(2);
+            tokens.push(token);
+            continue;
+        }
+
         // Punctuator
-        if c == &'+' || c == &'-' || c == &'*' || c == &'/' || c == &'(' || c == &')' {
+        if c == &'+' || c == &'-' || c == &'*' || c == &'/' || c == &'(' || c == &')' ||
+           c == &'>' || c == &'<' {
             let token = Token {
                 kind: TokenKind::Reserved,
                 val : 0,
                 s   : c.to_string(),
                 loc : lexer.pos,
             };
-            lexer.next_pos();
+            lexer.next_pos(1);
             tokens.push(token);
             continue;
         }
