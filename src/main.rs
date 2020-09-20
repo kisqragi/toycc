@@ -2,6 +2,9 @@ use std::env;
 use std::process;
 use std::iter::Iterator;
 
+const REGS: [&str; 8] = ["rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"];
+static mut CUR: usize = 0;
+
 #[derive(Debug)]
 struct Lexer {
     code: Vec<char>,
@@ -52,17 +55,117 @@ impl Lexer {
 
 #[derive(Debug, PartialEq)]
 enum TokenKind {
-    TkReserved,
-    TkNum,
-    TkEof,
+    Reserved,
+    Num,
+    Eof,
 }
 
 #[derive(Debug)]
 struct Token {
     kind: TokenKind,    // Kind of Token
-    val : Option<i64>,          // Number literal
-    s   : Option<String>,       // String of Token
+    val : i64,          // Number literal
+    s   : String,       // String of Token
     loc : usize,
+}
+
+#[derive(Debug, PartialEq)]
+enum NodeKind {
+    Num,
+    Add,
+    Sub,
+}
+
+#[derive(Debug)]
+struct Node {
+    kind: NodeKind,         // Node kind
+    lhs: Option<Box<Node>>, // Left-hand side
+    rhs: Option<Box<Node>>, // Right-hand side
+    val: i64,               // Used if kind == NodeKind::Num
+}
+
+impl Node {
+    fn new(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Self {
+        Self {
+            kind,
+            lhs: Some(lhs),
+            rhs: Some(rhs),
+            val: 0,   
+        }
+    }
+
+    fn new_num(val: i64) -> Self {
+        Self {
+            kind: NodeKind::Num,
+            lhs: None,
+            rhs: None,
+            val: val,
+        }
+    }
+
+    fn number(tokens: &Vec<Token>, pos: usize) -> Self {
+        if tokens[pos].kind == TokenKind::Num {
+            let val = tokens[pos].val;
+            return Self::new_num(val);
+        }
+        panic!("number expected, but got {}", tokens[pos].s);
+    }
+
+    fn expr(tokens: Vec<Token>) -> Self {
+        let mut pos = 0;
+        let mut lhs = Self::number(&tokens, pos);
+        pos += 1;
+
+        loop {
+
+            let op = &tokens[pos].s;
+
+            if op == "+" {
+                let rhs = Self::number(&tokens, pos+1);
+                lhs = Self::new(NodeKind::Add, Box::new(lhs), Box::new(rhs));
+                pos += 2;
+                continue;
+            }
+
+            if op == "-" {
+                let rhs = Self::number(&tokens, pos+1);
+                lhs = Self::new(NodeKind::Sub, Box::new(lhs), Box::new(rhs));
+                pos += 2;
+                continue;
+            }
+
+            return lhs;
+        }
+    }
+
+    fn gen(self) -> String {
+        if self.kind == NodeKind::Num {
+            unsafe {
+                let reg;
+                if CUR >= REGS.len() {
+                    panic!("register exhausted");
+                }
+                reg = REGS[CUR];
+                CUR += 1;
+                println!("  mov {}, {}", reg, self.val);
+                return reg.into();
+            }
+        }
+
+        let dst = self.lhs.unwrap().gen();
+        let src = self.rhs.unwrap().gen();
+
+        match self.kind {
+            NodeKind::Add => {
+                println!("  add {}, {}", dst, src);
+                return dst;
+            }
+            NodeKind::Sub => {
+                println!("  sub {}, {}", dst, src);
+                return dst;
+            }
+            _ => panic!("unknown operator")
+        }
+    }
 }
 
 fn error_at(lexer: &Lexer, pos: usize, s: String) {
@@ -90,10 +193,10 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
 
         // Numeric literal
         if lexer.getc().unwrap().is_ascii_digit() {
-            let kind = TokenKind::TkNum;
+            let kind = TokenKind::Num;
             let loc = lexer.pos;
-            let val = Some(lexer.strtol().unwrap());
-            let s = Some(lexer.code[loc..lexer.pos].iter().collect());
+            let val = lexer.strtol().unwrap();
+            let s = lexer.code[loc..lexer.pos].iter().collect();
             let token = Token { kind, val, s, loc };
             tokens.push(token);
             continue;
@@ -102,9 +205,9 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
         // Punctuator
         if lexer.getc().unwrap() == &'+' || lexer.getc().unwrap() == &'-' {
             let token = Token {
-                kind: TokenKind::TkReserved,
-                val : None,
-                s   : Some(lexer.getc().unwrap().to_string()),
+                kind: TokenKind::Reserved,
+                val : 0,
+                s   : lexer.getc().unwrap().to_string(),
                 loc : lexer.pos,
             };
             lexer.next_pos();
@@ -117,9 +220,9 @@ fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
     }
 
     tokens.push(Token {
-        kind: TokenKind::TkEof,
-        val : None,
-        s   : None,
+        kind: TokenKind::Eof,
+        val : 0,
+        s   : "".to_string(),
         loc : lexer.pos,
     });
 
@@ -137,32 +240,13 @@ fn main() {
 
     let mut lexer = Lexer::new(&args[1]);
     let tokens = tokenize(&mut lexer);
-    let mut tok_pos = 0;
+    let node = Node::expr(tokens);
 
     println!(".intel_syntax noprefix");
     println!(".globl main");
     println!("main:");
 
-    println!("  mov rax, {}", tokens[tok_pos].val.unwrap());
-    tok_pos += 1;
-
-    while tokens[tok_pos].kind != TokenKind::TkEof {
-
-        if tokens[tok_pos].s.as_ref().unwrap() == "+" {
-            println!("  add rax, {}", tokens[tok_pos+1].val.unwrap());
-            tok_pos += 2;
-            continue;
-        }
-
-        if tokens[tok_pos].s.as_ref().unwrap() == "-" {
-            println!("  sub rax, {}", tokens[tok_pos+1].val.unwrap());
-            tok_pos += 2;
-            continue;
-        }
-
-        eprintln!("unexpected charater: {:?}", tokens[tok_pos]);
-        process::exit(1);
-    }
+    println!("  mov rax, {}", node.gen());
 
     println!("  ret");
     println!("  ");
