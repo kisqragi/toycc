@@ -1,7 +1,7 @@
 use super::parse::{ Node, NodeKind, reg };
 use super::CUR;
 
-pub fn gen_expr(node: Node) {
+fn gen_expr(node: Node) {
     if node.kind == NodeKind::Num {
         unsafe {
             println!("  mov {}, {}", reg(CUR), node.val);
@@ -61,3 +61,38 @@ pub fn gen_expr(node: Node) {
     }
 }
 
+fn gen_stmt(node: Node) {
+    match node.kind {
+        NodeKind::ExprStmt => {
+            gen_expr(*node.lhs.unwrap());
+            unsafe {
+                println!("  mov rax, {}", reg(CUR-1));
+                CUR -= 1;
+            }
+        }
+        _ => panic!("invalid statement")
+    }
+}
+
+pub fn codegen(nodes: Vec<Node>) {
+    println!(".intel_syntax noprefix");
+    println!(".globl main");
+    println!("main:");
+
+    // Save callee-saved registers.
+    println!("  push r12");
+    println!("  push r13");
+    println!("  push r14");
+    println!("  push r15");
+
+    for n in nodes {
+        gen_stmt(n);
+    }
+
+    println!("  pop r15");
+    println!("  pop r14");
+    println!("  pop r13");
+    println!("  pop r12");
+    println!("  ret");
+    println!("  ");
+}

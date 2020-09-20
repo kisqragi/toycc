@@ -77,6 +77,16 @@ fn error_at(lexer: &Lexer, pos: usize, s: String) {
     process::exit(1);
 }
 
+fn ispunct(c: &char) -> bool {
+    let mut punct = ['!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-',
+                 '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^',
+                 '_', '`', '{', '|', '}'].iter();
+    match punct.find(|x| x == &c) {
+        Some(_) => true,
+        None => false,
+    }
+}
+
 pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
     let mut tokens = vec![];
     while !lexer.is_last() {
@@ -114,8 +124,7 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
         }
 
         // Punctuator
-        if c == &'+' || c == &'-' || c == &'*' || c == &'/' || c == &'(' || c == &')' ||
-           c == &'>' || c == &'<' {
+        if ispunct(c) {
             let token = Token {
                 kind: TokenKind::Reserved,
                 val : 0,
