@@ -111,6 +111,7 @@ impl Node {
         panic!("number expected, but got {}", tokens[pos].s);
     }
 
+    // expr = mul ("+" mul | "-" mul)*
     fn expr(tokens: &Vec<Token>, pos: usize) -> (Self, usize) {
         let (mut node, mut pos) = Self::mul(&tokens, pos);
 
@@ -139,8 +140,9 @@ impl Node {
         }
     }
 
+    // mul = unary ("*" unary | "/" unary)*
     fn mul(tokens: &Vec<Token>, pos: usize) -> (Self, usize) {
-        let (mut node, mut pos) = Self::primary(&tokens, pos);
+        let (mut node, mut pos) = Self::unary(&tokens, pos);
 
         
         loop {
@@ -150,14 +152,14 @@ impl Node {
 
             let op = &tokens[pos].s;
             if op == "*" {
-                let (rhs, p) = Self::primary(&tokens, pos+1);
+                let (rhs, p) = Self::unary(&tokens, pos+1);
                 node = Self::new_binary(NodeKind::Mul, Box::new(node), Box::new(rhs));
                 pos = p;
                 continue;
             }
 
             if op == "/" {
-                let (rhs, p) = Self::primary(&tokens, pos+1);
+                let (rhs, p) = Self::unary(&tokens, pos+1);
                 node = Self::new_binary(NodeKind::Div, Box::new(node), Box::new(rhs));
                 pos = p;
                 continue;
@@ -167,9 +169,26 @@ impl Node {
         }
     }
 
+    // unary = ("+" | "-") unary
+    //       | primary
+    fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Self, usize) {
+        let op = &tokens[pos].s;
+        if op == "+" {
+            return Self::unary(&tokens, pos+1);
+        }
+        if op == "-" {
+            let (node, p) = Self::unary(&tokens, pos+1);
+            pos = p;
+            return (Self::new_binary(NodeKind::Sub, Box::new(Self::new_num(0)), Box::new(node)), pos);
+        }
+
+        Self::primary(tokens, pos)
+    }
+
+    // primary = "(" expr ")" | num
     fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Self, usize) {
-        let s = &tokens[pos].s;
-        if s == "(" {
+        let c = &tokens[pos].s;
+        if c == "(" {
             let (node, mut pos) = Self::expr(&tokens, pos+1);
             pos = Self::skip(&tokens[pos].s, ")", pos);
             return (node, pos);
