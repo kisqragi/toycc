@@ -17,8 +17,11 @@ impl Lexer {
     }
 
     // codeのpos番目の文字を取得
-    fn getc(&self) -> Option<&char> {
-        self.code.get(self.pos)
+    fn getc(&self) -> &char {
+        match self.code.get(self.pos) {
+            Some(c) => c,
+            None => panic!("doesn’t exists token")
+        }
     }
 
     // posをn進める
@@ -33,7 +36,7 @@ impl Lexer {
 
     // 12+34があったら12までをi64に変換し、
     // posを進める。posは+の位置になる
-    fn strtol(&mut self) -> Option<i64> {
+    fn strtol(&mut self) -> i64 {
         let mut s = String::new();
         while let Some(c) = self.code.get(self.pos) {
             if c.is_ascii_digit() {
@@ -44,7 +47,10 @@ impl Lexer {
             }
         }
 
-        Some(s.parse::<i64>().unwrap())
+        match s.parse::<i64>() {
+            Ok(n) => n,
+            Err(e) => panic!("can't convert to numbers: {}", e)
+        }
     }
 }
 
@@ -64,7 +70,7 @@ pub struct Token {
     pub loc : usize,
 }
 
-fn error_at(lexer: &Lexer, pos: usize, s: String) {
+fn error_at(lexer: &Lexer, pos: usize, s: &str) {
     for c in lexer.code.iter() {
         print!("{}", c);
     }
@@ -79,9 +85,13 @@ fn error_at(lexer: &Lexer, pos: usize, s: String) {
 }
 
 fn ispunct(c: &char) -> bool {
-    let mut punct = ['!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-',
-                 '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^',
-                 '_', '`', '{', '|', '}'].iter();
+    // punct of C
+    let mut punct = [
+        '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-',
+        '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^',
+        '_', '`', '{', '|', '}'
+    ].iter();
+
     match punct.find(|x| x == &c) {
         Some(_) => true,
         None => false,
@@ -108,7 +118,7 @@ fn startswith(vc: &[char], s: &str) -> bool {
 pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
     let mut tokens = vec![];
     while !lexer.is_last() {
-        let c = lexer.getc().unwrap();
+        let c = lexer.getc();
         // Skip whitespace characters.
         if c.is_whitespace() {
             lexer.next_pos(1);
@@ -119,7 +129,7 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
         if c.is_ascii_digit() {
             let kind = TokenKind::Num;
             let loc = lexer.pos;
-            let val = lexer.strtol().unwrap();
+            let val = lexer.strtol();
             let s = lexer.code[loc..lexer.pos].iter().collect();
             let token = Token { kind, val, s, loc };
             tokens.push(token);
@@ -154,7 +164,9 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
 
         // Multi-letter punctuators
         // ==, !=, <= and >=
-        if (c == &'=' || c == &'!' || c == &'>' || c == &'<') && lexer.code[lexer.pos+1] == '=' {
+        let op = &lexer.code[lexer.pos..];
+        if startswith(op, "==") || startswith(op, "!=") ||
+           startswith(op, "<=") || startswith(op, ">=") {
             let s: String = lexer.code[lexer.pos..(lexer.pos+2)].iter().collect();
             let token = Token {
                 kind: TokenKind::Reserved,
@@ -180,7 +192,7 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
             continue;
         }
 
-        error_at(lexer, lexer.pos, "invalid token".to_string());
+        error_at(lexer, lexer.pos, "invalid token");
 
     }
 

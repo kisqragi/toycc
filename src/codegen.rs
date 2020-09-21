@@ -8,7 +8,6 @@ fn reg(idx: usize) -> String {
     }
 
     r[idx].to_string()
-    
 }
 
 fn gen_addr(node: Node) {
@@ -37,7 +36,6 @@ fn store() {
         CUR -= 1;
     }
 }
-
 
 fn gen_expr(node: Node) {
     match node.kind {

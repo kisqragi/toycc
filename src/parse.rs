@@ -15,9 +15,14 @@ pub enum NodeKind {
     Return,     // Return statement
     Assign,     // =
     Var,        // Variable
+    Null,       // Default value of NodeKind
 }
 
-#[derive(Debug)]
+impl Default for NodeKind {
+    fn default() -> Self { NodeKind::Null }
+}
+
+#[derive(Debug, Default)]
 pub struct Node {
     pub kind: NodeKind,             // Node kind
     pub lhs: Option<Box<Node>>,     // Left-hand side
@@ -31,8 +36,7 @@ fn new_binary(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Node {
         kind,
         lhs: Some(lhs),
         rhs: Some(rhs),
-        name: '\0',
-        val: 0,   
+        ..Default::default()
     }
 }
 
@@ -40,9 +44,7 @@ fn new_unary(kind: NodeKind, expr: Box<Node>) -> Node {
     Node {
         kind,
         lhs: Some(expr),
-        rhs: None,
-        name: '\0',
-        val: 0,   
+        ..Default::default()
     }
 }
 
@@ -50,10 +52,8 @@ fn new_unary(kind: NodeKind, expr: Box<Node>) -> Node {
 fn get_number(val: i64) -> Node {
     Node {
         kind: NodeKind::Num,
-        lhs: None,
-        rhs: None,
-        name: '\0',
         val: val,
+        ..Default::default()
     }
 }
 
@@ -68,10 +68,8 @@ fn new_num(tokens: &Vec<Token>, pos: usize) -> Node {
 fn new_var_node(tokens: &Vec<Token>, pos: usize) -> Node {
     Node {
         kind: NodeKind::Var,
-        lhs: None,
-        rhs: None,
         name: tokens[pos].s.chars().nth(0).unwrap(),
-        val: 0,
+        ..Default::default()
     }
 }
 

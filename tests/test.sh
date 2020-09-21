@@ -1,4 +1,7 @@
 cargo build
+if [ $? != 0 ]; then
+    exit 1
+fi
 
 #!/bin/bash
 assert() {
