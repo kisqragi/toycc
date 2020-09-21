@@ -61,4 +61,12 @@ assert 3 'k = 3; return k;'
 assert 8 'a=3; z=5; return a+z;'
 assert 6 'a=b=3; return a+b;'
 
+assert 3 'foo=3; return foo;'
+assert 7 'foo=3; hoge=4; return foo+hoge;'
+assert 1 'foo=3; hoge=4; return hoge-foo;'
+assert 2 'foo=5; hoge=3; return foo-hoge;'
+
+assert 123 'foo123=123; return foo123;'
+assert 1 '_foo=1; return _foo;'
+
 echo OK

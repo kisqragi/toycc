@@ -1,4 +1,4 @@
-use super::parse::{ Node, NodeKind };
+use super::parse::{ Node, NodeKind, Function, LOCALS };
 static mut CUR: usize = 0;
 
 fn reg(idx: usize) -> String {
@@ -12,15 +12,14 @@ fn reg(idx: usize) -> String {
 
 fn gen_addr(node: Node) {
     if node.kind == NodeKind::Var {
-        let mut offset = ((node.name as u32) - ('a' as u32) + 1) * 8;
-        offset += 32;   // for callee-saved registers
         unsafe {
-            println!("  lea {}, [rbp-{}]", reg(CUR), offset);
+            println!("  lea {}, [rbp-{}]", reg(CUR), LOCALS[node.var.unwrap()].offset);
             CUR += 1;
         }
         return;
     }
 
+    println!("{:#?}", node);
     panic!("not an lvalue");
 }
 
@@ -131,7 +130,7 @@ fn gen_stmt(node: Node) {
     }
 }
 
-pub fn codegen(nodes: Vec<Node>) {
+pub fn codegen(prog: Function) {
     println!(".intel_syntax noprefix");
     println!(".globl main");
     println!("main:");
@@ -139,14 +138,13 @@ pub fn codegen(nodes: Vec<Node>) {
     // Prologue. r12-r15 are callee-saved registers.
     println!("  push rbp");
     println!("  mov rbp, rsp");
-    // 240 = ('a'~'z')*8 + 32
-    println!("  sub rsp, 240");
+    println!("  sub rsp, {}", prog.stack_size);
     println!("  mov [rsp-8], r12");
     println!("  mov [rsp-16], r13");
     println!("  mov [rsp-24], r14");
     println!("  mov [rsp-32], r15");
 
-    for n in nodes {
+    for n in prog.nodes {
         gen_stmt(n);
     }
 

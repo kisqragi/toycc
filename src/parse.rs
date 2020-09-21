@@ -1,5 +1,7 @@
 use super::tokenize::{ Token, TokenKind };
 
+pub static mut LOCALS: Vec<Var> = vec![];
+
 #[derive(Debug, PartialEq)]
 pub enum NodeKind {
     Num,        // Integer
@@ -27,8 +29,25 @@ pub struct Node {
     pub kind: NodeKind,             // Node kind
     pub lhs: Option<Box<Node>>,     // Left-hand side
     pub rhs: Option<Box<Node>>,     // Right-hand side
-    pub name: char,                 // Used if kind == NodeKind::Var
+    pub var: Option<usize>,              // Used if kind == NodeKind::Var
     pub val: i64,                   // Used if kind == NodeKind::Num
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct Var {
+    pub name: String,
+    pub offset: usize,
+}
+
+fn find_var(tokens: &Vec<Token>, pos: usize) -> Option<usize> {
+    unsafe {
+        for (i, var) in LOCALS.iter().enumerate() {
+            if tokens[pos].s == var.name {
+                return Some(i);
+            }
+        }
+    }
+    None 
 }
 
 fn new_binary(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Node {
@@ -48,7 +67,6 @@ fn new_unary(kind: NodeKind, expr: Box<Node>) -> Node {
     }
 }
 
-
 fn get_number(val: i64) -> Node {
     Node {
         kind: NodeKind::Num,
@@ -65,12 +83,21 @@ fn new_num(tokens: &Vec<Token>, pos: usize) -> Node {
     panic!("number expected, but got {}", tokens[pos].s);
 }
 
-fn new_var_node(tokens: &Vec<Token>, pos: usize) -> Node {
+fn new_var_node(var: usize) -> Node {
     Node {
         kind: NodeKind::Var,
-        name: tokens[pos].s.chars().nth(0).unwrap(),
+        var: Some(var),
         ..Default::default()
     }
+}
+
+fn new_lvar(tokens: &Vec<Token>, pos: usize) -> usize {
+    let v = Var {
+        name: tokens[pos].s.clone(),
+        ..Default::default()
+    };
+    unsafe { LOCALS.push(v); }
+    return unsafe { LOCALS.len()-1 };
 }
 
 // stmt = "return" expr ";"
@@ -269,12 +296,17 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
         return (node, pos);
     }
 
-    let node;
-    match tokens[pos].kind {
-        TokenKind::Num => { node = new_num(&tokens, pos) }
-        TokenKind::Ident => { node = new_var_node(&tokens, pos) }
+    let node = match tokens[pos].kind {
+        TokenKind::Num => { new_num(&tokens, pos) }
+        TokenKind::Ident => { 
+            let var = match find_var(&tokens, pos) {
+                Some(v) => { v }
+                None => { new_lvar(&tokens, pos) }
+            };
+            new_var_node(var)
+        }
         _ => panic!("invalid primary: {}", tokens[pos].s)
-    }
+    };
 
     pos += 1;
     (node, pos)
@@ -287,8 +319,14 @@ fn skip(tok: &String, s: &str, pos: usize) -> usize {
     pos + 1
 }
 
+#[derive(Debug)]
+pub struct Function {
+    pub nodes: Vec<Node>,
+    pub stack_size: usize,
+}
+
 // program = stmt*
-pub fn parse(tokens: &Vec<Token>) -> Vec<Node> {
+pub fn parse(tokens: &Vec<Token>) -> Function {
     let mut nodes = vec![];
 
     let mut pos = 0;
@@ -298,5 +336,8 @@ pub fn parse(tokens: &Vec<Token>) -> Vec<Node> {
         pos = p;
     }
 
-    nodes
+    Function {
+        nodes,
+        stack_size: 0,
+    }
 }

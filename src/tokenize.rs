@@ -118,7 +118,7 @@ fn startswith(vc: &[char], s: &str) -> bool {
 pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
     let mut tokens = vec![];
     while !lexer.is_last() {
-        let c = lexer.getc();
+        let mut c = lexer.getc();
         // Skip whitespace characters.
         if c.is_whitespace() {
             lexer.next_pos(1);
@@ -150,14 +150,23 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
             continue;
         }
 
-        if &'a' <= c && c <= &'z' {
+        // Identifier
+        if is_alpha(c) {
+            let mut s = String::new();
+            let loc = lexer.pos;
+            while is_alnum(c) {
+                s.push_str(&c.to_string());
+                lexer.next_pos(1);
+                c = lexer.getc();
+            }
+
             let token = Token {
                 kind: TokenKind::Ident,
                 val : 0,
-                s: c.to_string(),
-                loc : lexer.pos,
+                s: s,
+                loc
             };
-            lexer.next_pos(1);
+
             tokens.push(token);
             continue;
         }
