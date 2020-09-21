@@ -50,9 +50,10 @@ impl Lexer {
 
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
-    Reserved,
-    Num,
-    Eof,
+    Reserved,   // Keywords or punctuators
+    Ident,      // Identifiers
+    Num,        // Numeric literal
+    Eof,        // End-of-file markers
 }
 
 #[derive(Debug)]
@@ -135,6 +136,18 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
                 loc : lexer.pos,
             };
             lexer.next_pos(6);
+            tokens.push(token);
+            continue;
+        }
+
+        if &'a' <= c && c <= &'z' {
+            let token = Token {
+                kind: TokenKind::Ident,
+                val : 0,
+                s: c.to_string(),
+                loc : lexer.pos,
+            };
+            lexer.next_pos(1);
             tokens.push(token);
             continue;
         }

@@ -13,6 +13,8 @@ pub enum NodeKind {
     Le,         // <=
     ExprStmt,   // Expression statement
     Return,     // Return statement
+    Assign,     // =
+    Var,        // Variable
 }
 
 #[derive(Debug)]
@@ -20,6 +22,7 @@ pub struct Node {
     pub kind: NodeKind,             // Node kind
     pub lhs: Option<Box<Node>>,     // Left-hand side
     pub rhs: Option<Box<Node>>,     // Right-hand side
+    pub name: char,                 // Used if kind == NodeKind::Var
     pub val: i64,                   // Used if kind == NodeKind::Num
 }
 
@@ -28,6 +31,7 @@ fn new_binary(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Node {
         kind,
         lhs: Some(lhs),
         rhs: Some(rhs),
+        name: '\0',
         val: 0,   
     }
 }
@@ -37,26 +41,38 @@ fn new_unary(kind: NodeKind, expr: Box<Node>) -> Node {
         kind,
         lhs: Some(expr),
         rhs: None,
+        name: '\0',
         val: 0,   
     }
 }
 
 
-fn new_num(val: i64) -> Node {
+fn get_number(val: i64) -> Node {
     Node {
         kind: NodeKind::Num,
         lhs: None,
         rhs: None,
+        name: '\0',
         val: val,
     }
 }
 
-fn number(tokens: &Vec<Token>, pos: usize) -> Node {
+fn new_num(tokens: &Vec<Token>, pos: usize) -> Node {
     if tokens[pos].kind == TokenKind::Num {
         let val = tokens[pos].val;
-        return new_num(val);
+        return get_number(val);
     }
     panic!("number expected, but got {}", tokens[pos].s);
+}
+
+fn new_var_node(tokens: &Vec<Token>, pos: usize) -> Node {
+    Node {
+        kind: NodeKind::Var,
+        lhs: None,
+        rhs: None,
+        name: tokens[pos].s.chars().nth(0).unwrap(),
+        val: 0,
+    }
 }
 
 // stmt = "return" expr ";"
@@ -79,9 +95,22 @@ fn expr_stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     (node, p)
 }
 
-// expr = mul ("+" mul | "-" mul)*
+// expr =  assign
 fn expr(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
-    equality(&tokens, pos)
+    assign(&tokens, pos)
+}
+
+// assign = equality ("=" assign)?
+fn assign(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+    let (mut node, mut pos) = equality(&tokens, pos);
+    let op = &tokens[pos].s;
+    if op == "=" {
+        let (rhs, p) = assign(&tokens, pos+1);
+        node = new_binary(NodeKind::Assign, Box::new(node), Box::new(rhs));  
+        pos = p;
+    }
+
+    (node, pos)
 }
 
 // equality = relational ("==" relational | "!=" relational)*
@@ -227,13 +256,13 @@ fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     if op == "-" {
         let (node, p) = unary(&tokens, pos+1);
         pos = p;
-        return (new_binary(NodeKind::Sub, Box::new(new_num(0)), Box::new(node)), pos);
+        return (new_binary(NodeKind::Sub, Box::new(get_number(0)), Box::new(node)), pos);
     }
 
     primary(tokens, pos)
 }
 
-// primary = "(" expr ")" | num
+// primary = "(" expr ")" | ident | num 
 fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     let c = &tokens[pos].s;
     if c == "(" {
@@ -242,7 +271,13 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
         return (node, pos);
     }
 
-    let node = number(&tokens, pos);
+    let node;
+    match tokens[pos].kind {
+        TokenKind::Num => { node = new_num(&tokens, pos) }
+        TokenKind::Ident => { node = new_var_node(&tokens, pos) }
+        _ => panic!("invalid primary: {}", tokens[pos].s)
+    }
+
     pos += 1;
     (node, pos)
 }
@@ -252,16 +287,6 @@ fn skip(tok: &String, s: &str, pos: usize) -> usize {
         panic!("expected '{}'", s);
     }
     pos + 1
-}
-
-pub fn reg(idx: usize) -> String {
-    let r = ["rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"];
-    if r.len() <= idx {
-        panic!("register out of range: {}", idx);
-    }
-
-    r[idx].to_string()
-    
 }
 
 // program = stmt*
