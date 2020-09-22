@@ -80,5 +80,9 @@ assert 3 'a=2;if (a-2) return 2; return 3;'
 assert 3 'a=0;if (0) a=2; else a=3; return a;'
 assert 2 'a=0;if (1) a=2; else a=3; return a;'
 
+assert 55 'i=0; j=0; for (i=0; i<= 10; i=i+1) j=i+j; return j;'
+assert 5 'for (;;) return 5; return 0;'
+assert 55 'j=0; for (i=0; i<= 10; i=i+1) j=i+j; return j;'
+assert 5 'for (i=0; i<= 10; i=i+1) if (i>=5) return i; return 0;'
 
 echo OK

@@ -14,6 +14,7 @@ pub enum NodeKind {
     Lt,         // <
     Le,         // <=
     If,         // "if"
+    For,        // "for"
     ExprStmt,   // Expression statement
     Return,     // Return statement
     Assign,     // =
@@ -31,10 +32,12 @@ pub struct Node {
     pub lhs: Option<Box<Node>>,     // Left-hand side
     pub rhs: Option<Box<Node>>,     // Right-hand side
 
-    // "if" statement
+    // "if" or "for" statement
     pub cond: Option<Box<Node>>,
     pub then: Option<Box<Node>>,
     pub els: Option<Box<Node>>,
+    pub init: Option<Box<Node>>,
+    pub inc: Option<Box<Node>>,
 
     pub var: Option<usize>,         // Used if kind == NodeKind::Var
     pub val: i64,                   // Used if kind == NodeKind::Num
@@ -110,6 +113,7 @@ fn new_lvar(tokens: &Vec<Token>, pos: usize) -> usize {
 
 // stmt = "return" expr ";"
 //      | "if" "(" expr ")" stmt ("else" stmt)?
+//      | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //      | expr-stmt
 fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     if tokens[pos].s == "return" {
@@ -141,6 +145,42 @@ fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
             node.els = Some(Box::new(t));
             p = pt;
         }
+
+        return (node, p);
+    }
+
+    // "for" statement
+    if tokens[pos].s == "for" {
+        let mut node = Node { kind: NodeKind::For, ..Default::default() };
+
+        let mut p = skip(&tokens, "(", pos+1);
+
+        // initとincは値を返さない
+        // init
+        if tokens[p].s != ";" {
+            let (init, p2) = expr(&tokens, p);
+            node.init = Some(Box::new(new_unary(NodeKind::ExprStmt, Box::new(init))));
+            p = p2;
+        }
+        p = skip(&tokens, ";", p);
+
+        // cond 
+        if tokens[p].s != ";" {
+            let (cond, p2) = expr(&tokens, p);
+            node.cond = Some(Box::new(cond));
+            p = p2;
+        }
+        p = skip(&tokens, ";", p);
+
+        if tokens[p].s != ")" {
+            let (inc, p2) = expr(&tokens, p);
+            node.inc = Some(Box::new(new_unary(NodeKind::ExprStmt, Box::new(inc))));
+            p = p2;
+        }
+        p = skip(&tokens, ")", p);
+
+        let (then, p) = stmt(&tokens, p);
+        node.then = Some(Box::new(then));
 
         return (node, p);
     }

@@ -157,6 +157,25 @@ fn gen_stmt(node: Node) {
                 println!(".L.end.{}:", seq);
             }
         }
+        NodeKind::For => {
+            let seq = get_labelseq();
+            if let Some(_) = node.init {
+                gen_stmt(*node.init.unwrap());
+            }
+            println!(".L.begin.{}:", seq);
+            if let Some(_) = node.cond {
+                gen_expr(*node.cond.unwrap());
+                let cur = get_cur(-1);
+                println!("  cmp {}, 0", reg(cur-1));
+                println!("  je .L.end.{}", seq);
+            }
+            gen_stmt(*node.then.unwrap());
+            if let Some(_) = node.inc {
+                gen_stmt(*node.inc.unwrap());
+            }
+            println!("  jmp .L.begin.{}", seq);
+            println!(".L.end.{}:", seq);
+        }
         _ => panic!("invalid statement")
     }
 }
