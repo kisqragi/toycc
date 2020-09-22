@@ -117,7 +117,7 @@ fn startswith(vc: &[char], s: &str) -> bool {
 
 fn starts_with_reserved(vc: &[char]) -> Option<String> {
     // Keyword
-    let kw = ["return", "if", "else", "for"];
+    let kw = ["return", "if", "else", "for", "while"];
 
     for i in 0..kw.len() {
         let len = kw[i].len();

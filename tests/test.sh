@@ -85,4 +85,6 @@ assert 5 'for (;;) return 5; return 0;'
 assert 55 'j=0; for (i=0; i<= 10; i=i+1) j=i+j; return j;'
 assert 5 'for (i=0; i<= 10; i=i+1) if (i>=5) return i; return 0;'
 
+assert 10 'i=0; while(i<10) i=i+1; return i;'
+
 echo OK

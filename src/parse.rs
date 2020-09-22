@@ -114,6 +114,7 @@ fn new_lvar(tokens: &Vec<Token>, pos: usize) -> usize {
 // stmt = "return" expr ";"
 //      | "if" "(" expr ")" stmt ("else" stmt)?
 //      | "for" "(" expr? ";" expr? ";" expr? ")" stmt
+//      | "while" "(" expr ")" stmt
 //      | expr-stmt
 fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     if tokens[pos].s == "return" {
@@ -177,6 +178,20 @@ fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
             node.inc = Some(Box::new(new_unary(NodeKind::ExprStmt, Box::new(inc))));
             p = p2;
         }
+        p = skip(&tokens, ")", p);
+
+        let (then, p) = stmt(&tokens, p);
+        node.then = Some(Box::new(then));
+
+        return (node, p);
+    }
+
+    if tokens[pos].s == "while" {
+        let mut node = Node { kind: NodeKind::For, ..Default::default() };
+        let p = skip(&tokens, "(", pos+1);
+
+        let (cond, mut p) = expr(&tokens, p);
+        node.cond = Some(Box::new(cond));
         p = skip(&tokens, ")", p);
 
         let (then, p) = stmt(&tokens, p);
