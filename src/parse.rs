@@ -13,6 +13,7 @@ pub enum NodeKind {
     Ne,         // !=
     Lt,         // <
     Le,         // <=
+    If,         // "if"
     ExprStmt,   // Expression statement
     Return,     // Return statement
     Assign,     // =
@@ -24,12 +25,18 @@ impl Default for NodeKind {
     fn default() -> Self { NodeKind::Null }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Node {
     pub kind: NodeKind,             // Node kind
     pub lhs: Option<Box<Node>>,     // Left-hand side
     pub rhs: Option<Box<Node>>,     // Right-hand side
-    pub var: Option<usize>,              // Used if kind == NodeKind::Var
+
+    // "if" statement
+    pub cond: Option<Box<Node>>,
+    pub then: Option<Box<Node>>,
+    pub els: Option<Box<Node>>,
+
+    pub var: Option<usize>,         // Used if kind == NodeKind::Var
     pub val: i64,                   // Used if kind == NodeKind::Num
 }
 
@@ -100,15 +107,42 @@ fn new_lvar(tokens: &Vec<Token>, pos: usize) -> usize {
     return unsafe { LOCALS.len()-1 };
 }
 
+
 // stmt = "return" expr ";"
+//      | "if" "(" expr ")" stmt ("else" stmt)?
 //      | expr-stmt
 fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     if tokens[pos].s == "return" {
         let (lhs, mut p) = expr(&tokens, pos+1);
         let node = new_unary(NodeKind::Return, Box::new(lhs));
-        p = skip(&tokens[p].s, ";", p);
+        p = skip(&tokens, ";", p);
         return (node, p);
     }
+
+    if tokens[pos].s == "if" {
+        let p = skip(&tokens, "(", pos+1);
+        let (cond, mut p) = expr(&tokens, p);
+        p = skip(&tokens, ")", p);
+        let (then, mut p) = stmt(&tokens, p);
+        let mut els = None;
+        if tokens[p].s == "else" {
+            let (t, pt) = stmt(&tokens, p);
+            els = Some(Box::new(t));
+            p = pt;
+        }
+
+        let node = Node {
+            kind: NodeKind::If,
+            cond: Some(Box::new(cond)),
+            then: Some(Box::new(then)),
+            els,
+            ..Default::default()
+        };
+
+        return (node, p);
+
+    }
+
     expr_stmt(&tokens, pos)
 }
 
@@ -116,7 +150,7 @@ fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 fn expr_stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     let (lhs, mut p) = expr(&tokens, pos);
     let node = new_unary(NodeKind::ExprStmt, Box::new(lhs));
-    p = skip(&tokens[p].s, ";", p);
+    p = skip(&tokens, ";", p);
     (node, p)
 }
 
@@ -292,7 +326,7 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     let c = &tokens[pos].s;
     if c == "(" {
         let (node, mut pos) = expr(&tokens, pos+1);
-        pos = skip(&tokens[pos].s, ")", pos);
+        pos = skip(&tokens, ")", pos);
         return (node, pos);
     }
 
@@ -312,8 +346,8 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     (node, pos)
 }
 
-fn skip(tok: &String, s: &str, pos: usize) -> usize {
-    if tok != &s {
+fn skip(tokens: &Vec<Token>, s: &str, pos: usize) -> usize {
+    if &tokens[pos].s != s {
         panic!("expected '{}'", s);
     }
     pos + 1

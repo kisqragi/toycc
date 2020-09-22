@@ -1,5 +1,14 @@
 use super::parse::{ Node, NodeKind, Function, LOCALS };
 static mut CUR: usize = 0;
+static mut LABELSEQ: usize = 1;
+
+fn get_labelseq() -> usize {
+    unsafe {
+        let labelseq = LABELSEQ;
+        LABELSEQ += 1;
+        labelseq
+    }
+}
 
 fn reg(idx: usize) -> String {
     let r = ["rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"];
@@ -124,6 +133,29 @@ fn gen_stmt(node: Node) {
             gen_expr(*node.lhs.unwrap());
             unsafe {
                 CUR -= 1;
+            }
+        }
+        NodeKind::If => {
+            unsafe {
+                let seq = get_labelseq();            
+                if let Some(_) = node.els {
+                    gen_expr(*node.cond.unwrap());
+                    CUR -= 1;
+                    println!("  cmp {}, 0", reg(CUR));
+                    println!("  je .L.else.{}", seq);
+                    gen_stmt(*node.then.unwrap());
+                    println!("  jmp .L.end.{}", seq);
+                    println!(".L.else.{}:", seq);
+                    gen_stmt(*node.els.unwrap());
+                    println!(".L.end.{}:", seq);
+                } else {
+                    gen_expr(*node.cond.unwrap());
+                    CUR -= 1;
+                    println!("  cmp {}, 0", reg(CUR));
+                    println!("  je .L.end.{}", seq);
+                    gen_stmt(*node.then.unwrap());
+                    println!(".L.end.{}:", seq);
+                }
             }
         }
         _ => panic!("invalid statement")

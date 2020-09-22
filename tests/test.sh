@@ -69,4 +69,11 @@ assert 2 'foo=5; hoge=3; return foo-hoge;'
 assert 123 'foo123=123; return foo123;'
 assert 1 '_foo=1; return _foo;'
 
+assert 3 'if (0) return 2; return 3;'
+assert 3 'if (1-1) return 2; return 3;'
+assert 2 'if (1) return 2; return 3;'
+assert 2 'if (2-1) return 2; return 3;'
+assert 2 'a=2;if (a-1) return 2; return 3;'
+assert 3 'a=2;if (a-2) return 2; return 3;'
+
 echo OK

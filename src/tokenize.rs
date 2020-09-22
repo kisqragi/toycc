@@ -62,7 +62,7 @@ pub enum TokenKind {
     Eof,        // End-of-file markers
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,    // Kind of Token
     pub val : i64,          // Number literal
@@ -115,6 +115,28 @@ fn startswith(vc: &[char], s: &str) -> bool {
     true
 }
 
+fn starts_with_reserved(vc: &[char]) -> Option<String> {
+    // Keyword
+    let kw = ["return", "if", "else"];
+
+    for i in 0..kw.len() {
+        let len = kw[i].len();
+        if startswith(vc, kw[i]) && !is_alnum(&vc[len]) {
+            return Some(kw[i].to_string());
+        }
+    }
+
+    // Multi-letter punctuators
+    let ops = ["==", "!=", "<=", ">="];
+    for i in 0..ops.len() {
+        if startswith(vc, ops[i]) {
+            return Some(ops[i].to_string());
+        }
+    }
+
+    None
+}
+
 pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
     let mut tokens = vec![];
     while !lexer.is_last() {
@@ -136,16 +158,16 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
             continue;
         }
 
-        // Keywords
-        if startswith(&lexer.code[lexer.pos..], "return") && !is_alnum(lexer.code.get(lexer.pos+6).unwrap()) {
-            let s: String = lexer.code[lexer.pos..(lexer.pos+6)].iter().collect();
+        // Keywords or Multi-letter punctuators
+        if let Some(s) = starts_with_reserved(&lexer.code[lexer.pos..]) {
+            let len = s.len();
             let token = Token {
                 kind: TokenKind::Reserved,
                 val : 0,
                 s,
                 loc : lexer.pos,
             };
-            lexer.next_pos(6);
+            lexer.next_pos(len);
             tokens.push(token);
             continue;
         }
@@ -167,23 +189,6 @@ pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
                 loc
             };
 
-            tokens.push(token);
-            continue;
-        }
-
-        // Multi-letter punctuators
-        // ==, !=, <= and >=
-        let op = &lexer.code[lexer.pos..];
-        if startswith(op, "==") || startswith(op, "!=") ||
-           startswith(op, "<=") || startswith(op, ">=") {
-            let s: String = lexer.code[lexer.pos..(lexer.pos+2)].iter().collect();
-            let token = Token {
-                kind: TokenKind::Reserved,
-                val : 0,
-                s,
-                loc : lexer.pos,
-            };
-            lexer.next_pos(2);
             tokens.push(token);
             continue;
         }
