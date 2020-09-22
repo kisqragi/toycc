@@ -1,6 +1,20 @@
 use super::parse::{ Node, NodeKind, Function, LOCALS };
-static mut CUR: usize = 0;
+static mut CUR: i64 = 0;
 static mut LABELSEQ: usize = 1;
+
+// get_cur(1) => CUR++ (C like)
+// get_cur(-1) => CUR-- (C like)
+fn get_cur(n: i64) -> usize {
+    let t;
+    unsafe {
+        t = CUR;
+        if CUR + n < 0 {
+            panic!("CUR is less than zero: {}", CUR+n);
+        }
+        CUR += n
+    }
+    t as usize
+}
 
 fn get_labelseq() -> usize {
     unsafe {
@@ -21,10 +35,7 @@ fn reg(idx: usize) -> String {
 
 fn gen_addr(node: Node) {
     if node.kind == NodeKind::Var {
-        unsafe {
-            println!("  lea {}, [rbp-{}]", reg(CUR), LOCALS[node.var.unwrap()].offset);
-            CUR += 1;
-        }
+        println!("  lea {}, [rbp-{}]", reg(get_cur(1)), unsafe { LOCALS[node.var.unwrap()].offset });
         return;
     }
 
@@ -33,26 +44,20 @@ fn gen_addr(node: Node) {
 }
 
 fn load() {
-    unsafe {
-        println!("  mov {}, [{}]", reg(CUR-1), reg(CUR-1));
-    }
+    let cur = get_cur(0)-1;
+    println!("  mov {}, [{}]", reg(cur), reg(cur));
 }
 
 fn store() {
-    unsafe {
-        println!("  mov [{}], {}", reg(CUR-1), reg(CUR-2));
-        CUR -= 1;
-    }
+    let cur = get_cur(-1);
+    println!("  mov [{}], {}", reg(cur-1), reg(cur-2));
 }
 
 fn gen_expr(node: Node) {
     match node.kind {
         NodeKind::Num => {
-            unsafe {
-                println!("  mov {}, {}", reg(CUR), node.val);
-                CUR += 1;
-                return;
-            }
+            println!("  mov {}, {}", reg(get_cur(1)), node.val);
+            return;
         }
         NodeKind::Var => {
             gen_addr(node);
@@ -73,11 +78,9 @@ fn gen_expr(node: Node) {
 
     let rd;
     let rs;
-    unsafe {
-        rd = reg(CUR-2);
-        rs = reg(CUR-1);
-        CUR -= 1;
-    }
+    let cur = get_cur(-1);
+    rd = reg(cur-2);
+    rs = reg(cur-1);
 
     match node.kind {
         NodeKind::Add => {
@@ -123,10 +126,8 @@ fn gen_stmt(node: Node) {
     match node.kind {
         NodeKind::Return => {
             gen_expr(*node.lhs.unwrap());
-            unsafe {
-                CUR -= 1;
-                println!("  mov rax, {}", reg(CUR));
-            }
+            let cur = get_cur(-1);
+            println!("  mov rax, {}", reg(cur-1));
             println!("  jmp .L.return");
         }
         NodeKind::ExprStmt => {
@@ -136,26 +137,24 @@ fn gen_stmt(node: Node) {
             }
         }
         NodeKind::If => {
-            unsafe {
-                let seq = get_labelseq();            
-                if let Some(_) = node.els {
-                    gen_expr(*node.cond.unwrap());
-                    CUR -= 1;
-                    println!("  cmp {}, 0", reg(CUR));
-                    println!("  je .L.else.{}", seq);
-                    gen_stmt(*node.then.unwrap());
-                    println!("  jmp .L.end.{}", seq);
-                    println!(".L.else.{}:", seq);
-                    gen_stmt(*node.els.unwrap());
-                    println!(".L.end.{}:", seq);
-                } else {
-                    gen_expr(*node.cond.unwrap());
-                    CUR -= 1;
-                    println!("  cmp {}, 0", reg(CUR));
-                    println!("  je .L.end.{}", seq);
-                    gen_stmt(*node.then.unwrap());
-                    println!(".L.end.{}:", seq);
-                }
+            let seq = get_labelseq();            
+            if let Some(_) = node.els {
+                gen_expr(*node.cond.unwrap());
+                let cur = get_cur(-1);
+                println!("  cmp {}, 0", reg(cur-1));
+                println!("  je .L.else.{}", seq);
+                gen_stmt(*node.then.unwrap());
+                println!("  jmp .L.end.{}", seq);
+                println!(".L.else.{}:", seq);
+                gen_stmt(*node.els.unwrap());
+                println!(".L.end.{}:", seq);
+            } else {
+                gen_expr(*node.cond.unwrap());
+                let cur = get_cur(-1);
+                println!("  cmp {}, 0", reg(cur-1));
+                println!("  je .L.end.{}", seq);
+                gen_stmt(*node.then.unwrap());
+                println!(".L.end.{}:", seq);
             }
         }
         _ => panic!("invalid statement")

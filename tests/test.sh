@@ -57,6 +57,7 @@ assert 2 '1; return 2; 3;'
 assert 3 '1; 2; return 3;'
 
 assert 3 'a=3; return a;'
+assert 5 'a=3; a=5; return a;'
 assert 3 'k = 3; return k;'
 assert 8 'a=3; z=5; return a+z;'
 assert 6 'a=b=3; return a+b;'
@@ -75,5 +76,9 @@ assert 2 'if (1) return 2; return 3;'
 assert 2 'if (2-1) return 2; return 3;'
 assert 2 'a=2;if (a-1) return 2; return 3;'
 assert 3 'a=2;if (a-2) return 2; return 3;'
+
+assert 3 'a=0;if (0) a=2; else a=3; return a;'
+assert 2 'a=0;if (1) a=2; else a=3; return a;'
+
 
 echo OK

@@ -119,28 +119,30 @@ fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
         return (node, p);
     }
 
+    // "if" statement
     if tokens[pos].s == "if" {
+        let mut node = Node { kind: NodeKind::If, ..Default::default() };
+
         let p = skip(&tokens, "(", pos+1);
+
+        // set cond
         let (cond, mut p) = expr(&tokens, p);
+        node.cond = Some(Box::new(cond));
+
         p = skip(&tokens, ")", p);
+
+        // set then 
         let (then, mut p) = stmt(&tokens, p);
-        let mut els = None;
+        node.then = Some(Box::new(then));
+
+        // "else"
         if tokens[p].s == "else" {
-            let (t, pt) = stmt(&tokens, p);
-            els = Some(Box::new(t));
+            let (t, pt) = stmt(&tokens, p+1);
+            node.els = Some(Box::new(t));
             p = pt;
         }
 
-        let node = Node {
-            kind: NodeKind::If,
-            cond: Some(Box::new(cond)),
-            then: Some(Box::new(then)),
-            els,
-            ..Default::default()
-        };
-
         return (node, p);
-
     }
 
     expr_stmt(&tokens, pos)
