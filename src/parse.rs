@@ -15,6 +15,7 @@ pub enum NodeKind {
     Le,         // <=
     If,         // "if"
     For,        // "for"
+    Block,      // { ... }
     ExprStmt,   // Expression statement
     Return,     // Return statement
     Assign,     // =
@@ -38,6 +39,9 @@ pub struct Node {
     pub els: Option<Box<Node>>,
     pub init: Option<Box<Node>>,
     pub inc: Option<Box<Node>>,
+
+    // Block
+    pub body: Option<Vec<Box<Node>>>,
 
     pub var: Option<usize>,         // Used if kind == NodeKind::Var
     pub val: i64,                   // Used if kind == NodeKind::Num
@@ -112,6 +116,7 @@ fn new_lvar(tokens: &Vec<Token>, pos: usize) -> usize {
 
 
 // stmt = "return" expr ";"
+//      | "{" compound-stmt
 //      | "if" "(" expr ")" stmt ("else" stmt)?
 //      | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //      | "while" "(" expr ")" stmt
@@ -200,7 +205,27 @@ fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
         return (node, p);
     }
 
+    if tokens[pos].s == "{" {
+        let (body, p) = compound_stmt(&tokens, pos+1);
+        return (body, p);
+    }
+
     expr_stmt(&tokens, pos)
+}
+
+// compound-stmt = stmt* "}"
+fn compound_stmt(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
+    let mut node = Node { kind: NodeKind::Block, ..Default::default() };
+
+    let mut body: Vec<Box<Node>> = vec![];
+    while tokens[pos].s != "}" {
+        let (node, p) = stmt(&tokens, pos);
+        body.push(Box::new(node));
+        pos = p;
+    }
+
+    node.body = Some(body);
+    return (node, pos+1);
 }
 
 // expr-stmt = expr ";"
@@ -412,7 +437,7 @@ fn skip(tokens: &Vec<Token>, s: &str, pos: usize) -> usize {
 
 #[derive(Debug)]
 pub struct Function {
-    pub nodes: Vec<Node>,
+    pub body: Node,
     pub stack_size: usize,
 }
 
@@ -427,8 +452,12 @@ pub fn parse(tokens: &Vec<Token>) -> Function {
         pos = p;
     }
 
+    let mut pos = 0;
+    pos = skip(&tokens, "{", pos);
+    let (body, _pos) = compound_stmt(&tokens, pos);
+
     Function {
-        nodes,
+        body,
         stack_size: 0,
     }
 }

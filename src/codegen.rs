@@ -176,6 +176,11 @@ fn gen_stmt(node: Node) {
             println!("  jmp .L.begin.{}", seq);
             println!(".L.end.{}:", seq);
         }
+        NodeKind::Block => {
+            for n in node.body.unwrap() {
+                gen_stmt(*n);
+            }
+        }
         _ => panic!("invalid statement")
     }
 }
@@ -194,9 +199,7 @@ pub fn codegen(prog: Function) {
     println!("  mov [rsp-24], r14");
     println!("  mov [rsp-32], r15");
 
-    for n in prog.nodes {
-        gen_stmt(n);
-    }
+    gen_stmt(prog.body);
 
     // Epilogue
     println!(".L.return:");
