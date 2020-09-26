@@ -19,6 +19,8 @@ pub enum NodeKind {
     ExprStmt,   // Expression statement
     Return,     // Return statement
     Assign,     // =
+    Addr,       // &
+    Deref,      // *
     Var,        // Variable
     Null,       // Default value of NodeKind
 }
@@ -387,20 +389,28 @@ fn mul(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     }
 }
 
-// unary = ("+" | "-") unary
+// unary = ("+" | "-" | "&" | "*")? unary
 //       | primary
 fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
-    let op = &tokens[pos].s;
-    if op == "+" {
-        return unary(&tokens, pos+1);
-    }
-    if op == "-" {
-        let (node, p) = unary(&tokens, pos+1);
-        pos = p;
-        return (new_binary(NodeKind::Sub, Box::new(get_number(0)), Box::new(node)), pos);
-    }
-
-    primary(tokens, pos)
+    match *(&tokens[pos].s.as_str()) {
+        "+" => return unary(&tokens, pos+1),
+        "-" => {
+            let (node, p) = unary(&tokens, pos+1);
+            pos = p;
+            return (new_binary(NodeKind::Sub, Box::new(get_number(0)), Box::new(node)), pos);
+        }
+        "&" => {
+            let (node, p) = unary(&tokens, pos+1);
+            pos = p;
+            return (new_unary(NodeKind::Addr, Box::new(node)), pos);
+        }
+        "*" => {
+            let (node, p) = unary(&tokens, pos+1);
+            pos = p;
+            return (new_unary(NodeKind::Deref, Box::new(node)), pos);
+        }
+        _ => return primary(tokens, pos)
+    };
 }
 
 // primary = "(" expr ")" | ident | num 

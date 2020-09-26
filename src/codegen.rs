@@ -25,7 +25,7 @@ fn get_labelseq() -> usize {
 }
 
 fn reg(idx: usize) -> String {
-    let r = ["rdi", "rsi", "r10", "r11", "r12", "r13", "r14", "r15"];
+    let r = ["r10", "r11", "r12", "r13", "r14", "r15"];
     if r.len() <= idx {
         panic!("register out of range: {}", idx);
     }
@@ -34,13 +34,18 @@ fn reg(idx: usize) -> String {
 }
 
 fn gen_addr(node: Node) {
-    if node.kind == NodeKind::Var {
-        println!("  lea {}, [rbp-{}]", reg(get_cur(1)), unsafe { LOCALS[node.var.unwrap()].offset });
-        return;
+    match node.kind {
+        NodeKind::Var => {
+            println!("  lea {}, [rbp-{}]", reg(get_cur(1)), unsafe { LOCALS[node.var.unwrap()].offset });
+        }
+        NodeKind::Deref => {
+            gen_expr(*node.lhs.unwrap());
+        }
+        _ => {
+            println!("{:#?}", node);
+            panic!("not an lvalue");
+        }
     }
-
-    println!("{:#?}", node);
-    panic!("not an lvalue");
 }
 
 fn load() {
@@ -68,6 +73,15 @@ fn gen_expr(node: Node) {
             gen_expr(*node.rhs.unwrap());
             gen_addr(*node.lhs.unwrap());
             store();
+            return;
+        }
+        NodeKind::Deref => {
+            gen_expr(*node.lhs.unwrap());
+            load();
+            return;
+        }
+        NodeKind::Addr => {
+            gen_addr(*node.lhs.unwrap());
             return;
         }
         _ => {}
