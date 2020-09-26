@@ -1,8 +1,9 @@
 use super::tokenize::{ Token, TokenKind };
+use super::types::{ Type, add_type, is_integer };
 
 pub static mut LOCALS: Vec<Var> = vec![];
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum NodeKind {
     Num,        // Integer
     Add,        // +
@@ -29,9 +30,11 @@ impl Default for NodeKind {
     fn default() -> Self { NodeKind::Null }
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct Node {
     pub kind: NodeKind,             // Node kind
+    pub ty: Type,                   // Type, e.g. int or pointer to int
+
     pub lhs: Option<Box<Node>>,     // Left-hand side
     pub rhs: Option<Box<Node>>,     // Right-hand side
 
@@ -331,6 +334,61 @@ fn relational(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 
 }
 
+fn new_add(mut lhs: Node, mut rhs: Node) -> Node {
+    lhs = add_type(&mut lhs);
+    rhs = add_type(&mut rhs);
+
+    // num + num
+    if is_integer(&lhs.ty) && is_integer(&rhs.ty) {
+        return new_binary(NodeKind::Add, Box::new(lhs.clone()), Box::new(rhs.clone()));
+    }
+
+    if lhs.ty.base != None && rhs.ty.base != None {
+        eprintln!("invalid operands");
+        eprintln!("lhs = {:#?}", lhs);
+        eprintln!("rhs = {:#?}", rhs);
+    }
+
+    // Canonicalize `num + ptr` to `ptr + num`.
+    if lhs.ty.base == None && rhs.ty.base != None {
+        let tmp = lhs;
+        lhs = rhs;
+        rhs = tmp;
+    }
+
+    // ptr + num
+    rhs = new_binary(NodeKind::Mul, Box::new(rhs), Box::new(get_number(8)));
+    new_binary(NodeKind::Add, Box::new(lhs), Box::new(rhs))
+}
+
+fn new_sub(mut lhs: Node, mut rhs: Node) -> Node {
+    lhs = add_type(&mut lhs);
+    rhs = add_type(&mut rhs);
+
+    // num - num
+    if is_integer(&lhs.ty) && is_integer(&rhs.ty) {
+        return new_binary(NodeKind::Sub, Box::new(lhs.clone()), Box::new(rhs.clone()));
+    }
+
+    // ptr - num
+    if lhs.ty.base != None && is_integer(&rhs.ty) {
+        rhs = new_binary(NodeKind::Mul, Box::new(rhs), Box::new(get_number(8)));
+        return new_binary(NodeKind::Sub, Box::new(lhs), Box::new(rhs));
+    }
+
+    // num - ptr (error)
+    if lhs.ty.base == None && rhs.ty.base != None {
+        eprintln!("invalid operands");
+        eprintln!("lhs = {:#?}", lhs);
+        eprintln!("rhs = {:#?}", rhs);
+    }
+
+    // `ptr-ptr` returns the result of `ptr-ptr` divided by its size.
+    // The result is a number of elements, but the value can also be negative.
+    lhs = new_binary(NodeKind::Sub, Box::new(lhs), Box::new(rhs));
+    new_binary(NodeKind::Div, Box::new(lhs), Box::new(get_number(8)))
+}
+
 // add = mul ("+" mul | "-" mul)*
 fn add(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     let (mut node, mut pos) = mul(&tokens, pos);
@@ -344,14 +402,14 @@ fn add(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 
         if op == "+" {
             let (rhs, p) = mul(&tokens, pos+1);
-            node = new_binary(NodeKind::Add, Box::new(node), Box::new(rhs));
+            node = new_add(node, rhs);
             pos = p;
             continue;
         }
 
         if op == "-" {
             let (rhs, p) = mul(&tokens, pos+1);
-            node = new_binary(NodeKind::Sub, Box::new(node), Box::new(rhs));
+            node = new_sub(node, rhs);
             pos = p;
             continue;
         }
