@@ -1,4 +1,5 @@
 use super::parse::{ Node, NodeKind::* };
+use super::tokenize::Token;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeKind {
@@ -14,24 +15,31 @@ impl Default for TypeKind {
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct Type {
     pub kind: TypeKind,
+
+    // Pointer
     pub base: Option<Box<Type>>,
+
+    // Declaration
+    pub name: Option<Token>,
 }
 
 pub fn is_integer(ty: &Type) -> bool {
     ty.kind == TypeKind::Int
 }
 
-fn pointer_to(base: Type) -> Type {
+pub fn pointer_to(base: Type) -> Type {
     Type {
         kind: TypeKind::Ptr,
         base: Some(Box::new(base)),
+        name: None,
     }
 }
 
-fn ty_int() -> Type {
+pub fn ty_int() -> Type {
     Type {
         kind: TypeKind::Int,
         base: None,
+        name: None,
     }
 }
 

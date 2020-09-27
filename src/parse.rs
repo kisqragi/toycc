@@ -1,5 +1,6 @@
 use super::tokenize::{ Token, TokenKind };
-use super::types::{ Type, add_type, is_integer };
+use super::types::{ Type, add_type, is_integer, ty_int, pointer_to };
+use std::process::exit;
 
 pub static mut LOCALS: Vec<Var> = vec![];
 
@@ -55,6 +56,7 @@ pub struct Node {
 #[derive(Debug, Default, Clone)]
 pub struct Var {
     pub name: String,
+    pub ty: Type,
     pub offset: usize,
 }
 
@@ -89,7 +91,7 @@ fn new_unary(kind: NodeKind, expr: Box<Node>) -> Node {
 fn get_number(val: i64) -> Node {
     Node {
         kind: NodeKind::Num,
-        val: val,
+        val,
         ..Default::default()
     }
 }
@@ -110,9 +112,10 @@ fn new_var_node(var: usize) -> Node {
     }
 }
 
-fn new_lvar(tokens: &Vec<Token>, pos: usize) -> usize {
+fn new_lvar(tokens: &Vec<Token>, pos: usize, ty: Type) -> usize {
     let v = Var {
         name: tokens[pos].s.clone(),
+        ty,
         ..Default::default()
     };
     unsafe { LOCALS.push(v); }
@@ -218,19 +221,82 @@ fn stmt(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     expr_stmt(&tokens, pos)
 }
 
-// compound-stmt = stmt* "}"
+// compound-stmt = (declaration | stmt)* "}"
 fn compound_stmt(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     let mut node = Node { kind: NodeKind::Block, ..Default::default() };
 
     let mut body: Vec<Box<Node>> = vec![];
     while tokens[pos].s != "}" {
-        let (node, p) = stmt(&tokens, pos);
-        body.push(Box::new(node));
-        pos = p;
+        if tokens[pos].s == "int" {
+            let (mut node, p) = declaration(&tokens, pos);
+            body.push(Box::new(add_type(&mut node)));
+            pos = p;
+        } else {
+            let (mut node, p) = stmt(&tokens, pos);
+            body.push(Box::new(add_type(&mut node)));
+            pos = p;
+        }
     }
 
     node.body = Some(body);
     return (node, pos+1);
+}
+
+// declaration = typespec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
+fn declaration(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
+    let (basety, mut pos) = typespec(&tokens, pos);
+
+    let mut body: Vec<Box<Node>> = vec![];
+    let mut i = 0;
+    loop {
+        if tokens[pos].s == ";" { pos += 1; break; }
+
+        if i > 0 {
+            let p = skip(&tokens, ",", pos);
+            pos = p;
+        }
+        i += 1;
+
+        let (ty, p) = declarator(&tokens, pos, basety.clone());
+        pos = p;
+        let var = new_lvar(&tokens, pos-1, ty);
+
+        if tokens[pos].s != "=" { continue; }
+
+        let lhs = new_var_node(var);
+        let (rhs, p) = assign(&tokens, pos-1);
+        pos = p;
+        let node = new_binary(NodeKind::Assign, Box::new(lhs), Box::new(rhs));
+        body.push(Box::new(new_unary(NodeKind::ExprStmt, Box::new(node))));
+    }
+
+
+    let mut node = Node { kind: NodeKind::Block, ..Default::default() };
+    node.body = Some(body);
+    (node, pos)
+}
+
+// typespec = "int"
+fn typespec(tokens: &Vec<Token>, mut pos: usize) -> (Type, usize) {
+    pos = skip(&tokens, "int", pos);
+    (ty_int(), pos)
+}
+
+// declarator = "*"* ident
+fn declarator(tokens: &Vec<Token>, mut pos: usize, mut ty: Type) -> (Type, usize) {
+    loop {
+        let (f, p) = consume(&tokens, "*", pos);
+        pos = p;
+        if !f { break; }
+        ty = pointer_to(ty);
+    }
+
+    if tokens[pos].kind != TokenKind::Ident {
+        eprintln!("expected a variable name: {}", tokens[pos].s);
+    }
+
+    ty.name = Some(tokens[pos].clone());
+    (ty, pos+1)
 }
 
 // expr-stmt = expr ";"
@@ -485,11 +551,17 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
         TokenKind::Ident => { 
             let var = match find_var(&tokens, pos) {
                 Some(v) => { v }
-                None => { new_lvar(&tokens, pos) }
+                None => {
+                    eprintln!("undefined variable: {}", tokens[pos].s);
+                    exit(1);
+                }
             };
             new_var_node(var)
         }
-        _ => panic!("invalid primary: {}", tokens[pos].s)
+        _ => {
+            eprintln!("invalid primary: {}", tokens[pos].s);
+            exit(1);
+        }
     };
 
     pos += 1;
@@ -502,6 +574,17 @@ fn skip(tokens: &Vec<Token>, s: &str, pos: usize) -> usize {
     }
     pos + 1
 }
+
+// トークンが期待するトークンの場合、トークンを一つ消費して
+// 真を返す。違う場合偽を返す。
+fn consume(tokens: &Vec<Token>, s: &str, mut pos: usize) -> (bool, usize) {
+    if &tokens[pos].s == s {
+        pos += 1;
+        return (true, pos);
+    }
+    (false, pos)
+}
+
 
 #[derive(Debug)]
 pub struct Function {

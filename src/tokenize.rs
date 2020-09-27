@@ -54,7 +54,7 @@ impl Lexer {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenKind {
     Reserved,   // Keywords or punctuators
     Ident,      // Identifiers
@@ -62,7 +62,7 @@ pub enum TokenKind {
     Eof,        // End-of-file markers
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub kind: TokenKind,    // Kind of Token
     pub val : i64,          // Number literal
@@ -117,7 +117,7 @@ fn startswith(vc: &[char], s: &str) -> bool {
 
 fn starts_with_reserved(vc: &[char]) -> Option<String> {
     // Keyword
-    let kw = ["return", "if", "else", "for", "while"];
+    let kw = ["return", "if", "else", "for", "while", "int"];
 
     for i in 0..kw.len() {
         let len = kw[i].len();
