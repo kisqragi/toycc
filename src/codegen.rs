@@ -84,6 +84,14 @@ fn gen_expr(node: Node) {
             gen_addr(*node.lhs.unwrap());
             return;
         }
+        NodeKind::Funcall => {
+            println!("  push r10");
+            println!("  push r11");
+//            println!("  mov rax, 0");
+            println!("  call {}", node.funcname);
+            println!("  mov {}, rax", reg(get_cur(1)));
+            return;
+        }
         _ => {}
     }
 

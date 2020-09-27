@@ -24,6 +24,7 @@ pub enum NodeKind {
     Addr,       // &
     Deref,      // *
     Var,        // Variable
+    Funcall,    // Function call
     Null,       // Default value of NodeKind
 }
 
@@ -48,6 +49,9 @@ pub struct Node {
 
     // Block
     pub body: Option<Vec<Box<Node>>>,
+
+    // Function call
+    pub funcname: String,
 
     pub var: Option<usize>,         // Used if kind == NodeKind::Var
     pub val: i64,                   // Used if kind == NodeKind::Num
@@ -537,8 +541,9 @@ fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     };
 }
 
-// primary = "(" expr ")" | ident | num 
-fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
+// primary = "(" expr ")" | ident args? | num 
+// args = "(" ")"
+fn primary(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     let c = &tokens[pos].s;
     if c == "(" {
         let (node, mut pos) = expr(&tokens, pos+1);
@@ -546,26 +551,29 @@ fn primary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
         return (node, pos);
     }
 
-    let node = match tokens[pos].kind {
-        TokenKind::Num => { new_num(&tokens, pos) }
-        TokenKind::Ident => { 
-            let var = match find_var(&tokens, pos) {
-                Some(v) => { v }
-                None => {
-                    eprintln!("undefined variable: {}", tokens[pos].s);
-                    exit(1);
-                }
+    if tokens[pos].kind == TokenKind::Ident {
+        // Function call
+        if tokens[pos+1].s == "(" {
+            let node = Node {
+                kind: NodeKind::Funcall,
+                funcname: tokens[pos].s.clone(),
+                ..Default::default()
             };
-            new_var_node(var)
+            let pos = skip(&tokens, ")", pos+2);
+            return (node, pos);
         }
-        _ => {
-            eprintln!("invalid primary: {}", tokens[pos].s);
+
+        // Variable
+        let var = find_var(&tokens, pos);
+        if var == None {
+            eprintln!("undefined variable: {}", tokens[pos].s);
             exit(1);
         }
-    };
+        return (new_var_node(var.unwrap()), pos+1);
+    }
 
-    pos += 1;
-    (node, pos)
+    let node = new_num(&tokens, pos);
+    (node, pos+1)
 }
 
 fn skip(tokens: &Vec<Token>, s: &str, pos: usize) -> usize {

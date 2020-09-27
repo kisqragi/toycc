@@ -57,7 +57,7 @@ pub fn add_type(node: &mut Node) -> Node {
         Add | Sub | Mul | Div | Assign => {
             node.ty = node.lhs.as_ref().unwrap().ty.clone()
         }
-        Equal | Ne | Lt | Le | Var | Num => {
+        Equal | Ne | Lt | Le | Var | Num | Funcall => {
             node.ty = ty_int()
         }
         Addr => node.ty = pointer_to(node.lhs.as_ref().unwrap().ty.clone()),

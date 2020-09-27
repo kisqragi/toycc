@@ -3,13 +3,19 @@ if [ $? != 0 ]; then
     exit 1
 fi
 
+cat <<EOF | gcc -xc -c -o ./target/tmp2.o -
+int ret3() { return 3; }
+int ret5() { return 5; }
+EOF
+
+
 #!/bin/bash
 assert() {
   expected="$1"
   input="$2"
 
   ./target/debug/toy "$input" > ./target/tmp.s || exit
-  gcc -static -o ./target/tmp ./target/tmp.s
+  gcc -static -o ./target/tmp ./target/tmp.s ./target/tmp2.o
   ./target/tmp
   actual="$?"
 
@@ -105,5 +111,10 @@ assert 2 '{ int x=3; return (&x+2)-&x; }'
 
 assert 8 '{ int x, y; x=3; y=5; return x+y; }'
 assert 8 '{ int x=3, y=5; return x+y; }'
+
+assert 3 '{ return ret3(); }'
+assert 5 '{ return ret5(); }'
+assert 5 '{ int a = ret3(); a = ret5(); return a; }'
+assert 3 '{ int a = ret5(); a = ret3(); return a; }'
 
 echo OK
