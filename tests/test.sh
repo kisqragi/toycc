@@ -6,6 +6,12 @@ fi
 cat <<EOF | gcc -xc -c -o ./target/tmp2.o -
 int ret3() { return 3; }
 int ret5() { return 5; }
+int add(int x, int y) { return x + y; }
+int sub(int x, int y) { return x - y; }
+
+int add6(int a, int b, int c, int d, int e, int f) {
+    return a+b+c+d+e+f;
+}
 EOF
 
 
@@ -116,5 +122,10 @@ assert 3 '{ return ret3(); }'
 assert 5 '{ return ret5(); }'
 assert 5 '{ int a = ret3(); a = ret5(); return a; }'
 assert 3 '{ int a = ret5(); a = ret3(); return a; }'
+
+assert 5 '{ return add(2, 3); }'
+assert 2 '{ return sub(5, 3); }'
+assert 21 '{ return add6(1,2,3,4,5,6); }'
+assert 5 '{ int a=2, b=3; return add(a, b); }'
 
 echo OK

@@ -52,6 +52,7 @@ pub struct Node {
 
     // Function call
     pub funcname: String,
+    pub args: Option<Vec<Box<Node>>>,
 
     pub var: Option<usize>,         // Used if kind == NodeKind::Var
     pub val: i64,                   // Used if kind == NodeKind::Num
@@ -541,8 +542,7 @@ fn unary(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     };
 }
 
-// primary = "(" expr ")" | ident args? | num 
-// args = "(" ")"
+// primary   = "(" expr ")" | ident func-args? | num
 fn primary(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     let c = &tokens[pos].s;
     if c == "(" {
@@ -554,13 +554,7 @@ fn primary(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     if tokens[pos].kind == TokenKind::Ident {
         // Function call
         if tokens[pos+1].s == "(" {
-            let node = Node {
-                kind: NodeKind::Funcall,
-                funcname: tokens[pos].s.clone(),
-                ..Default::default()
-            };
-            let pos = skip(&tokens, ")", pos+2);
-            return (node, pos);
+            return funcall(&tokens, pos);
         }
 
         // Variable
@@ -574,6 +568,34 @@ fn primary(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
 
     let node = new_num(&tokens, pos);
     (node, pos+1)
+}
+
+// func-args = "(" (assign ("," assign)*)? ")"
+fn funcall(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
+    let start = pos;
+    pos += 2;   // eat ident & "("
+
+    let mut args: Vec<Box<Node>> = vec![];
+
+    while tokens[pos].s != ")" {
+        if (pos-2) != start {
+            pos = skip(&tokens, ",", pos);
+        }
+        let (node, p) = assign(&tokens, pos);
+        args.push(Box::new(node));
+        pos = p;
+    }
+
+    pos = skip(&tokens, ")", pos);
+
+    let node = Node {
+        kind: NodeKind::Funcall,
+        funcname: tokens[start].s.clone(),
+        args: Some(args),
+        ..Default::default()
+    };
+
+    (node, pos)
 }
 
 fn skip(tokens: &Vec<Token>, s: &str, pos: usize) -> usize {

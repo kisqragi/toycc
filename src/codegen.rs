@@ -24,6 +24,11 @@ fn get_labelseq() -> usize {
     }
 }
 
+fn argreg(idx: usize) -> String {
+    let argreg = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+    argreg[idx].to_string()
+}
+
 fn reg(idx: usize) -> String {
     let r = ["r10", "r11", "r12", "r13", "r14", "r15"];
     if r.len() <= idx {
@@ -85,10 +90,24 @@ fn gen_expr(node: Node) {
             return;
         }
         NodeKind::Funcall => {
+            let mut nargs = 0;
+            for arg in node.args.unwrap() {
+                gen_expr(*arg);
+                nargs += 1;
+            }
+
+            for i in 1..nargs+1 {
+                let cur = get_cur(-1);
+                println!("  mov {}, {}", argreg(nargs-i), reg(cur-1));
+            }
+
+
             println!("  push r10");
             println!("  push r11");
 //            println!("  mov rax, 0");
             println!("  call {}", node.funcname);
+            println!("  pop r11");
+            println!("  pop r10");
             println!("  mov {}, rax", reg(get_cur(1)));
             return;
         }
