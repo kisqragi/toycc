@@ -1,5 +1,5 @@
 use super::tokenize::{ Token, TokenKind };
-use super::types::{ Type, add_type, is_integer, ty_int, pointer_to };
+use super::types::{ Type, add_type, is_integer, ty_int, pointer_to, func_type };
 use std::process::exit;
 
 pub static mut LOCALS: Vec<Var> = vec![];
@@ -247,6 +247,35 @@ fn compound_stmt(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
     return (node, pos+1);
 }
 
+fn copy_locals() -> Vec<Var> {
+    let mut locals = Vec::new();
+    unsafe {
+        for v in LOCALS.iter() {
+            locals.push(v.clone());
+        }
+    }
+    locals
+}
+
+// funcdef = typespec declarator "{" compound-stmt
+fn funcdef(tokens: &Vec<Token>, mut pos: usize) -> (Function, usize) {
+    static_locals_clear();
+    let (ty, p) = typespec(&tokens, pos);
+    let (ty, p) = declarator(&tokens, p, ty);
+
+    pos = skip(&tokens, "{", p);
+
+    let (node, pos) = compound_stmt(&tokens, pos);
+    let locals = copy_locals();
+
+    (Function {
+        name: ty.name.unwrap().s,
+        node,
+        locals,
+        ..Default::default()
+    }, pos)
+}
+
 // declaration = typespec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
 fn declaration(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
     let (basety, mut pos) = typespec(&tokens, pos);
@@ -269,7 +298,7 @@ fn declaration(tokens: &Vec<Token>, pos: usize) -> (Node, usize) {
         if tokens[pos].s != "=" { continue; }
 
         let lhs = new_var_node(var);
-        let (rhs, p) = assign(&tokens, pos-1);
+        let (rhs, p) = assign(&tokens, pos+1);
         pos = p;
         let node = new_binary(NodeKind::Assign, Box::new(lhs), Box::new(rhs));
         body.push(Box::new(new_unary(NodeKind::ExprStmt, Box::new(node))));
@@ -287,7 +316,7 @@ fn typespec(tokens: &Vec<Token>, mut pos: usize) -> (Type, usize) {
     (ty_int(), pos)
 }
 
-// declarator = "*"* ident
+// declarator = "*"* ident type-suffix
 fn declarator(tokens: &Vec<Token>, mut pos: usize, mut ty: Type) -> (Type, usize) {
     loop {
         let (f, p) = consume(&tokens, "*", pos);
@@ -300,8 +329,18 @@ fn declarator(tokens: &Vec<Token>, mut pos: usize, mut ty: Type) -> (Type, usize
         eprintln!("expected a variable name: {}", tokens[pos].s);
     }
 
+    let (mut ty, p) = type_suffix(&tokens, pos+1, ty);
     ty.name = Some(tokens[pos].clone());
-    (ty, pos+1)
+    (ty, p)
+}
+
+// type-suffix = ( "(" func-params? ")" )
+fn type_suffix(tokens: &Vec<Token>, mut pos: usize, ty: Type) -> (Type, usize) {
+    if tokens[pos].s == "(" {
+        pos = skip(&tokens, ")", pos+1);
+        return (func_type(ty), pos);
+    }
+    (ty, pos)
 }
 
 // expr-stmt = expr ";"
@@ -616,20 +655,34 @@ fn consume(tokens: &Vec<Token>, s: &str, mut pos: usize) -> (bool, usize) {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct Function {
+    pub name: String,
     pub node: Node,
+    pub locals: Vec<Var>,
     pub stack_size: usize,
 }
 
-// program = stmt*
-pub fn parse(tokens: &Vec<Token>) -> Function {
-    let mut pos = 0;
-    pos = skip(&tokens, "{", pos);
-    let (node, _pos) = compound_stmt(&tokens, pos);
+#[derive(Debug, Default)]
+pub struct Program {
+    pub functions: Vec<Function>,
+}
 
-    Function {
-        node,
-        stack_size: 0,
+fn static_locals_clear() {
+    unsafe {
+        LOCALS = Vec::new();
     }
+}
+
+// program = funcdef*
+pub fn parse(tokens: &Vec<Token>) -> Program {
+    let mut pos = 0;
+    let mut prog = Program { ..Default::default() };
+    while tokens[pos].kind != TokenKind::Eof {
+        let (func, p) = funcdef(&tokens, pos);
+        pos = p;
+        prog.functions.push(func);
+    }
+
+    prog
 }

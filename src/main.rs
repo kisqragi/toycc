@@ -2,7 +2,7 @@ extern crate toy;
 
 use toy::codegen::codegen;
 use toy::tokenize::{ tokenize, Lexer };
-use toy::parse::{ parse, LOCALS };
+use toy::parse::parse;
 
 use std::env;
 use std::process;
@@ -24,16 +24,16 @@ fn main() {
     let tokens = tokenize(&mut lexer);
     let mut prog = parse(&tokens);
 
-    let mut offset = 32;
-
-    unsafe {
-        for i in 0..LOCALS.len() {
+    for i in 0..prog.functions.len() {
+        let mut offset = 32;
+        for j in 0..prog.functions[i].locals.len() {
             offset += 8;
-            LOCALS[i].offset = offset;
+            prog.functions[i].locals[j].offset = offset;
         }
+        prog.functions[i].stack_size = align_to(offset, 16);
     }
 
-    prog.stack_size = align_to(offset, 16);
+//    println!("{:#?}", prog);
 
     codegen(prog);
 }

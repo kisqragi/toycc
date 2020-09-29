@@ -5,6 +5,7 @@ use super::tokenize::Token;
 pub enum TypeKind {
     Int,
     Ptr,
+    Func,
     _None,   // Default
 }
 
@@ -21,6 +22,9 @@ pub struct Type {
 
     // Declaration
     pub name: Option<Token>,
+
+    // Function type
+    pub return_ty: Option<Box<Type>>,
 }
 
 pub fn is_integer(ty: &Type) -> bool {
@@ -31,15 +35,22 @@ pub fn pointer_to(base: Type) -> Type {
     Type {
         kind: TypeKind::Ptr,
         base: Some(Box::new(base)),
-        name: None,
+        ..Default::default()
     }
 }
 
 pub fn ty_int() -> Type {
     Type {
         kind: TypeKind::Int,
-        base: None,
-        name: None,
+        ..Default::default()
+    }
+}
+
+pub fn func_type(return_ty: Type) -> Type {
+    Type {
+        kind: TypeKind::Func,
+        return_ty: Some(Box::new(return_ty)),
+        ..Default::default()
     }
 }
 

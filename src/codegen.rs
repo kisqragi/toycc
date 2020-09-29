@@ -1,4 +1,4 @@
-use super::parse::{ Node, NodeKind, Function, LOCALS };
+use super::parse::{ Node, NodeKind, Program, Function };
 static mut CUR: i64 = 0;
 static mut LABELSEQ: usize = 1;
 
@@ -38,13 +38,13 @@ fn reg(idx: usize) -> String {
     r[idx].to_string()
 }
 
-fn gen_addr(node: Node) {
+fn gen_addr(node: Node, f: &Function) {
     match node.kind {
         NodeKind::Var => {
-            println!("  lea {}, [rbp-{}]", reg(get_cur(1)), unsafe { LOCALS[node.var.unwrap()].offset });
+            println!("  lea {}, [rbp-{}]", reg(get_cur(1)), f.locals[node.var.unwrap()].offset);
         }
         NodeKind::Deref => {
-            gen_expr(*node.lhs.unwrap());
+            gen_expr(*node.lhs.unwrap(), f);
         }
         _ => {
             println!("{:#?}", node);
@@ -63,36 +63,36 @@ fn store() {
     println!("  mov [{}], {}", reg(cur-1), reg(cur-2));
 }
 
-fn gen_expr(node: Node) {
+fn gen_expr(node: Node, f: &Function) {
     match node.kind {
         NodeKind::Num => {
             println!("  mov {}, {}", reg(get_cur(1)), node.val);
             return;
         }
         NodeKind::Var => {
-            gen_addr(node);
+            gen_addr(node, f);
             load();
             return;
         }
         NodeKind::Assign => {
-            gen_expr(*node.rhs.unwrap());
-            gen_addr(*node.lhs.unwrap());
+            gen_expr(*node.rhs.unwrap(), f);
+            gen_addr(*node.lhs.unwrap(), f);
             store();
             return;
         }
         NodeKind::Deref => {
-            gen_expr(*node.lhs.unwrap());
+            gen_expr(*node.lhs.unwrap(), f);
             load();
             return;
         }
         NodeKind::Addr => {
-            gen_addr(*node.lhs.unwrap());
+            gen_addr(*node.lhs.unwrap(), f);
             return;
         }
         NodeKind::Funcall => {
             let mut nargs = 0;
             for arg in node.args.unwrap() {
-                gen_expr(*arg);
+                gen_expr(*arg, f);
                 nargs += 1;
             }
 
@@ -114,8 +114,8 @@ fn gen_expr(node: Node) {
         _ => {}
     }
 
-    gen_expr(*node.lhs.unwrap());
-    gen_expr(*node.rhs.unwrap());
+    gen_expr(*node.lhs.unwrap(), f);
+    gen_expr(*node.rhs.unwrap(), f);
 
     let rd;
     let rs;
@@ -163,16 +163,16 @@ fn gen_expr(node: Node) {
     }
 }
 
-fn gen_stmt(node: Node) {
+fn gen_stmt(node: Node, f: &Function) {
     match node.kind {
         NodeKind::Return => {
-            gen_expr(*node.lhs.unwrap());
+            gen_expr(*node.lhs.unwrap(), f);
             let cur = get_cur(-1);
             println!("  mov rax, {}", reg(cur-1));
-            println!("  jmp .L.return");
+            println!("  jmp .L.return.{}", f.name);
         }
         NodeKind::ExprStmt => {
-            gen_expr(*node.lhs.unwrap());
+            gen_expr(*node.lhs.unwrap(), f);
             unsafe {
                 CUR -= 1;
             }
@@ -180,76 +180,77 @@ fn gen_stmt(node: Node) {
         NodeKind::If => {
             let seq = get_labelseq();            
             if let Some(_) = node.els {
-                gen_expr(*node.cond.unwrap());
+                gen_expr(*node.cond.unwrap(), f);
                 let cur = get_cur(-1);
                 println!("  cmp {}, 0", reg(cur-1));
                 println!("  je .L.else.{}", seq);
-                gen_stmt(*node.then.unwrap());
+                gen_stmt(*node.then.unwrap(), f);
                 println!("  jmp .L.end.{}", seq);
                 println!(".L.else.{}:", seq);
-                gen_stmt(*node.els.unwrap());
+                gen_stmt(*node.els.unwrap(), f);
                 println!(".L.end.{}:", seq);
             } else {
-                gen_expr(*node.cond.unwrap());
+                gen_expr(*node.cond.unwrap(), f);
                 let cur = get_cur(-1);
                 println!("  cmp {}, 0", reg(cur-1));
                 println!("  je .L.end.{}", seq);
-                gen_stmt(*node.then.unwrap());
+                gen_stmt(*node.then.unwrap(), f);
                 println!(".L.end.{}:", seq);
             }
         }
         NodeKind::For => {
             let seq = get_labelseq();
             if let Some(_) = node.init {
-                gen_stmt(*node.init.unwrap());
+                gen_stmt(*node.init.unwrap(), f);
             }
             println!(".L.begin.{}:", seq);
             if let Some(_) = node.cond {
-                gen_expr(*node.cond.unwrap());
+                gen_expr(*node.cond.unwrap(), f);
                 let cur = get_cur(-1);
                 println!("  cmp {}, 0", reg(cur-1));
                 println!("  je .L.end.{}", seq);
             }
-            gen_stmt(*node.then.unwrap());
+            gen_stmt(*node.then.unwrap(), f);
             if let Some(_) = node.inc {
-                gen_stmt(*node.inc.unwrap());
+                gen_stmt(*node.inc.unwrap(), f);
             }
             println!("  jmp .L.begin.{}", seq);
             println!(".L.end.{}:", seq);
         }
         NodeKind::Block => {
             for n in node.body.unwrap() {
-                gen_stmt(*n);
+                gen_stmt(*n, f);
             }
         }
         _ => panic!("invalid statement")
     }
 }
 
-pub fn codegen(prog: Function) {
+pub fn codegen(prog: Program) {
     println!(".intel_syntax noprefix");
-    println!(".globl main");
-    println!("main:");
+    for f in &prog.functions {
+        println!(".globl {}", f.name);
+        println!("{}:", f.name);
 
-    // Prologue. r12-r15 are callee-saved registers.
-    println!("  push rbp");
-    println!("  mov rbp, rsp");
-    println!("  sub rsp, {}", prog.stack_size);
-    println!("  mov [rsp-8], r12");
-    println!("  mov [rsp-16], r13");
-    println!("  mov [rsp-24], r14");
-    println!("  mov [rsp-32], r15");
+        // Prologue. r12-r15 are callee-saved registers.
+        println!("  push rbp");
+        println!("  mov rbp, rsp");
+        println!("  sub rsp, {}", f.stack_size);
+        println!("  mov [rsp-8], r12");
+        println!("  mov [rsp-16], r13");
+        println!("  mov [rsp-24], r14");
+        println!("  mov [rsp-32], r15");
 
-    gen_stmt(prog.node);
+        gen_stmt(f.node.clone(), &f);
 
-    // Epilogue
-    println!(".L.return:");
-    println!("  mov r12, [rsp-8]");
-    println!("  mov r13, [rsp-16]");
-    println!("  mov r14, [rsp-24]");
-    println!("  mov r15, [rsp-32]");
-    println!("  mov rsp, rbp");
-    println!("  pop rbp");
-    println!("  ret");
-    println!("  ");
+        // Epilogue
+        println!(".L.return.{}:", f.name);
+        println!("  mov r12, [rsp-8]");
+        println!("  mov r13, [rsp-16]");
+        println!("  mov r14, [rsp-24]");
+        println!("  mov r15, [rsp-32]");
+        println!("  mov rsp, rbp");
+        println!("  pop rbp");
+        println!("  ret");
+    }
 }
