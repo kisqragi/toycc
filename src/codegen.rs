@@ -241,6 +241,15 @@ pub fn codegen(prog: Program) {
         println!("  mov [rsp-24], r14");
         println!("  mov [rsp-32], r15");
 
+        // Save arguments to the stack
+        let mut i = f.params.len();
+
+        for j in 0..f.params.len() {
+            i -= 1;
+            println!("  mov [rbp-{}], {}", f.locals[j].offset, argreg(i))
+        }
+
+        // Emit code
         gen_stmt(f.node.clone(), &f);
 
         // Epilogue

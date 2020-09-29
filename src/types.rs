@@ -25,6 +25,7 @@ pub struct Type {
 
     // Function type
     pub return_ty: Option<Box<Type>>,
+    pub params: Vec<Type>,
 }
 
 pub fn is_integer(ty: &Type) -> bool {
@@ -52,6 +53,11 @@ pub fn func_type(return_ty: Type) -> Type {
         return_ty: Some(Box::new(return_ty)),
         ..Default::default()
     }
+}
+
+pub fn copy_type(ty: Type) -> Type {
+    let ret = ty.clone();
+    ret
 }
 
 pub fn add_type(node: &mut Node) -> Node {

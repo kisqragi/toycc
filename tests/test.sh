@@ -131,4 +131,10 @@ assert 5 'int main() { int a=2, b=3; return add(a, b); }'
 assert 10 'int main() { return ret10(); } int ret10 { return 10; }'
 assert 10 'int ret10 { return 10; } int main() { return ret10(); }'
 
+assert 5 'int main() { return add2(2,3); } int add2(int x, int y) { return x + y; }'
+assert 5 'int main() { return sub(10,5); } int sub2(int x, int y) { return x - y; }'
+assert 55 'int main() { return fib(9); } int fib (int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); }'
+
+assert 21 'int main() { return _add6(1,2,3,4,5,6); } int _add6(int a, int b, int c, int d, int e, int f) { return a+b+c+d+e+f; }'
+
 echo OK

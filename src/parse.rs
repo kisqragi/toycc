@@ -1,5 +1,5 @@
 use super::tokenize::{ Token, TokenKind };
-use super::types::{ Type, add_type, is_integer, ty_int, pointer_to, func_type };
+use super::types::{ Type, add_type, is_integer, ty_int, pointer_to, func_type, copy_type };
 use std::process::exit;
 
 pub static mut LOCALS: Vec<Var> = vec![];
@@ -115,6 +115,18 @@ fn new_var_node(var: usize) -> Node {
         var: Some(var),
         ..Default::default()
     }
+}
+
+fn new_lvar_parms(t: Type) {
+    let ty = t.clone();
+    let name = t.name.unwrap().s.clone();
+
+    let v = Var {
+        name,
+        ty,
+        ..Default::default()
+    };
+    unsafe { LOCALS.push(v); }
 }
 
 fn new_lvar(tokens: &Vec<Token>, pos: usize, ty: Type) -> usize {
@@ -265,12 +277,18 @@ fn funcdef(tokens: &Vec<Token>, mut pos: usize) -> (Function, usize) {
 
     pos = skip(&tokens, "{", p);
 
+    for t in ty.params {
+        new_lvar_parms(t);
+    }
+    let params = copy_locals();
+
     let (node, pos) = compound_stmt(&tokens, pos);
     let locals = copy_locals();
 
     (Function {
         name: ty.name.unwrap().s,
         node,
+        params,
         locals,
         ..Default::default()
     }, pos)
@@ -335,10 +353,29 @@ fn declarator(tokens: &Vec<Token>, mut pos: usize, mut ty: Type) -> (Type, usize
 }
 
 // type-suffix = ( "(" func-params? ")" )
-fn type_suffix(tokens: &Vec<Token>, mut pos: usize, ty: Type) -> (Type, usize) {
+// func-params = param ("," param)*
+// param       = typespec declarator
+fn type_suffix(tokens: &Vec<Token>, mut pos: usize, mut ty: Type) -> (Type, usize) {
     if tokens[pos].s == "(" {
-        pos = skip(&tokens, ")", pos+1);
-        return (func_type(ty), pos);
+        pos += 1;
+
+        let mut params: Vec<Type> = vec![];
+
+        while tokens[pos].s != ")" {
+            if params.len() != 0 {
+                pos = skip(&tokens, ",", pos);
+            }
+            let (basety, p) = typespec(&tokens, pos);
+            let (ty, p) = declarator(&tokens, p, basety);
+            pos = p;
+            params.push(copy_type(ty));
+        }
+
+        ty = func_type(ty);
+        ty.params = params;
+
+        pos = skip(&tokens, ")", pos);
+        return (ty, pos);
     }
     (ty, pos)
 }
@@ -620,8 +657,8 @@ fn funcall(tokens: &Vec<Token>, mut pos: usize) -> (Node, usize) {
         if (pos-2) != start {
             pos = skip(&tokens, ",", pos);
         }
-        let (node, p) = assign(&tokens, pos);
-        args.push(Box::new(node));
+        let (mut node, p) = assign(&tokens, pos);
+        args.push(Box::new(add_type(&mut node)));
         pos = p;
     }
 
@@ -660,6 +697,7 @@ pub struct Function {
     pub name: String,
     pub node: Node,
     pub locals: Vec<Var>,
+    pub params: Vec<Var>,
     pub stack_size: usize,
 }
 

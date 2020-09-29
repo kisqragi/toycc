@@ -33,7 +33,5 @@ fn main() {
         prog.functions[i].stack_size = align_to(offset, 16);
     }
 
-//    println!("{:#?}", prog);
-
     codegen(prog);
 }
