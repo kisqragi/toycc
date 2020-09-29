@@ -240,7 +240,7 @@ pub fn codegen(prog: Function) {
     println!("  mov [rsp-24], r14");
     println!("  mov [rsp-32], r15");
 
-    gen_stmt(prog.body);
+    gen_stmt(prog.node);
 
     // Epilogue
     println!(".L.return:");

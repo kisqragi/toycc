@@ -618,27 +618,18 @@ fn consume(tokens: &Vec<Token>, s: &str, mut pos: usize) -> (bool, usize) {
 
 #[derive(Debug)]
 pub struct Function {
-    pub body: Node,
+    pub node: Node,
     pub stack_size: usize,
 }
 
 // program = stmt*
 pub fn parse(tokens: &Vec<Token>) -> Function {
-    let mut nodes = vec![];
-
-    let mut pos = 0;
-    while tokens[pos].kind != TokenKind::Eof {
-        let (node, p) = stmt(&tokens, pos);
-        nodes.push(node);
-        pos = p;
-    }
-
     let mut pos = 0;
     pos = skip(&tokens, "{", pos);
-    let (body, _pos) = compound_stmt(&tokens, pos);
+    let (node, _pos) = compound_stmt(&tokens, pos);
 
     Function {
-        body,
+        node,
         stack_size: 0,
     }
 }
