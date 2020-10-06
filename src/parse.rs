@@ -2,8 +2,6 @@ use super::tokenize::{ Token, TokenKind };
 use super::types::{ Type, add_type, is_integer, ty_int, pointer_to, func_type, copy_type };
 use std::process::exit;
 
-pub static mut LOCALS: Vec<Var> = vec![];
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum NodeKind {
     Num,        // Integer
@@ -66,11 +64,9 @@ pub struct Var {
 }
 
 fn find_var(pc: &mut ParseContext) -> Option<usize> {
-    unsafe {
-        for (i, var) in LOCALS.iter().enumerate() {
-            if pc.tokens[pc.pos].s == var.name {
-                return Some(i);
-            }
+    for (i, var) in pc.locals.iter().enumerate() {
+        if pc.tokens[pc.pos].s == var.name {
+            return Some(i);
         }
     }
     None 
@@ -117,7 +113,7 @@ fn new_var_node(var: usize) -> Node {
     }
 }
 
-fn new_lvar_parms(t: Type) {
+fn new_lvar_parms(pc: &mut ParseContext, t: Type) {
     let ty = t.clone();
     let name = t.name.unwrap().s.clone();
 
@@ -126,7 +122,7 @@ fn new_lvar_parms(t: Type) {
         ty,
         ..Default::default()
     };
-    unsafe { LOCALS.push(v); }
+    pc.locals.push(v);
 }
 
 fn new_lvar(pc: &mut ParseContext, ty: Type) -> usize {
@@ -135,8 +131,8 @@ fn new_lvar(pc: &mut ParseContext, ty: Type) -> usize {
         ty,
         ..Default::default()
     };
-    unsafe { LOCALS.push(v); }
-    return unsafe { LOCALS.len()-1 };
+    pc.locals.push(v);
+    return pc.locals.len()-1;
 }
 
 
@@ -260,31 +256,21 @@ fn compound_stmt(pc: &mut ParseContext) -> Node {
     return node;
 }
 
-fn copy_locals() -> Vec<Var> {
-    let mut locals = Vec::new();
-    unsafe {
-        for v in LOCALS.iter() {
-            locals.push(v.clone());
-        }
-    }
-    locals
-}
-
 // funcdef = typespec declarator "{" compound-stmt
 fn funcdef(pc: &mut ParseContext) -> Function {
-    static_locals_clear();
+    pc.locals = Vec::new();
     let ty = typespec(pc);
     let ty = declarator(pc, ty);
 
     skip(pc, "{");
 
     for t in ty.params {
-        new_lvar_parms(t);
+        new_lvar_parms(pc, t);
     }
-    let params = copy_locals();
+    let params = pc.locals.clone();
 
     let node = compound_stmt(pc);
-    let locals = copy_locals();
+    let locals = pc.locals.clone();
 
     Function {
         name: ty.name.unwrap().s,
@@ -712,22 +698,17 @@ pub struct Program {
     pub functions: Vec<Function>,
 }
 
-fn static_locals_clear() {
-    unsafe {
-        LOCALS = Vec::new();
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct ParseContext {
     tokens: Vec<Token>,
     pos: usize,
+    locals: Vec<Var>,
 }
 
 // program = funcdef*
 pub fn parse(tokens: Vec<Token>) -> Program {
     let mut prog = Program { ..Default::default() };
-    let mut pc = ParseContext { tokens, pos:0 };
+    let mut pc = ParseContext { tokens, ..Default::default() };
     while pc.tokens[pc.pos].kind != TokenKind::Eof {
         let func = funcdef(&mut pc);
         prog.functions.push(func);
