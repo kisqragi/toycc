@@ -1,5 +1,3 @@
-# toy
+# toycc
 
-toy is C compiler written in Rust.  
-toy is provisional name.  
-Please name this compiler!  
+toycc is C compiler written in Rust.  

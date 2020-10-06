@@ -1,8 +1,8 @@
-extern crate toy;
+extern crate toycc;
 
-use toy::codegen::codegen;
-use toy::tokenize::{ tokenize, Lexer };
-use toy::parse::parse;
+use toycc::codegen::codegen;
+use toycc::tokenize::{ tokenize, Lexer };
+use toycc::parse::parse;
 
 use std::env;
 use std::process;

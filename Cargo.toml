@@ -1,5 +1,5 @@
 [package]
-name = "toy"
+name = "toycc"
 version = "0.1.0"
 authors = ["kisqragi <kisaragi.sec@gmail.com>"]
 edition = "2018"

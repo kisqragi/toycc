@@ -20,7 +20,7 @@ assert() {
   expected="$1"
   input="$2"
 
-  ./target/debug/toy "$input" > ./target/tmp.s || exit
+  ./target/debug/toycc "$input" > ./target/tmp.s || exit
   gcc -static -o ./target/tmp ./target/tmp.s ./target/tmp2.o
   ./target/tmp
   actual="$?"
@@ -104,7 +104,7 @@ assert 3 'int main() { {1; {2;} return 3;} }'
 assert 55 'int main() { int i=0; int j=0; for(;;) { j=j+1; i=i+j; if (j==10) return i; } return 0; }'
 
 # zinccとはローカル変数の配置順が違うので注意
-# toy   = ..r14->r15->x->y
+# toycc = ..r14->r15->x->y
 # zincc = ..r14->r15->y->x
 assert 3 'int main() {int x=3; return *&x; }'
 assert 3 'int main() {int x=3; int *y=&x; int **z=&y; return **z; }'
