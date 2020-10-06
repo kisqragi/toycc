@@ -22,7 +22,7 @@ fn main() {
 
     let mut lexer = Lexer::new(&args[1]);
     let tokens = tokenize(&mut lexer);
-    let mut prog = parse(&tokens);
+    let mut prog = parse(tokens);
 
     for i in 0..prog.functions.len() {
         let mut offset = 32;
