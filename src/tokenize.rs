@@ -6,8 +6,62 @@ pub struct Lexer {
     pos: usize,
 }
 
-impl Lexer {
+#[derive(Debug, PartialEq, Clone)]
+pub struct Token {
+    pub kind: TokenKind,    // Kind of Token
+}
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum TokenKind {
+    Keyword(Keyword), // Keyword
+    Symbol(Symbol),     // Symbol
+    Ident(String),      // Identifiers
+    Num(i64),           // Numeric literal
+    Eof,                // End-of-file markers
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Symbol {
+    Add,            // +
+    Sub,            // -
+    Div,            // /
+    Eq,             // ==
+    Ne,             // !=
+    Lt,             // <
+    Le,             // <=
+    Gt,             // >
+    Ge,             // >=
+    Assign,         // =
+    Ampersand,      // &
+    Asterisk,       // *
+    Comma,          // ,
+    Semicolon,      // ;
+    OpeningParen,   // (
+    ClosingParen,   // )
+    OpeningBrace,   // {
+    ClosingBrace,   // }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Keyword {
+    Int,        // "int"
+    If,         // "if"
+    Else,       // "else"
+    For,        // "for"
+    While,      // "while"
+    Return,     // "return"
+}
+
+macro_rules! retrieve_ident {
+    ($e:expr) => {
+        match &$e.kind {
+            &TokenKind::Ident(ref ident) => ident.to_string(),
+            _ => "".to_string(),
+        }
+    };
+}
+
+impl Lexer {
     pub fn new(args: &String) -> Lexer {
         let code: Vec<char> = args.chars().collect();
         Lexer { 
@@ -54,34 +108,87 @@ impl Lexer {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum TokenKind {
-    Reserved,   // Keywords or punctuators
-    Ident,      // Identifiers
-    Num,        // Numeric literal
-    Eof,        // End-of-file markers
+impl Token {
+    fn new(kind: TokenKind) -> Self {
+        Self { kind }
+    }
+
+    fn convert_symbol(self) -> Self {
+        let ident = retrieve_ident!(self);
+        let kind = match ident.as_str() {
+            "+"  => TokenKind::Symbol(Symbol::Add),
+            "-"  => TokenKind::Symbol(Symbol::Sub),
+            "*"  => TokenKind::Symbol(Symbol::Asterisk),
+            "/"  => TokenKind::Symbol(Symbol::Div),
+            "==" => TokenKind::Symbol(Symbol::Eq),
+            "!=" => TokenKind::Symbol(Symbol::Ne),
+            "<"  => TokenKind::Symbol(Symbol::Lt),
+            "<=" => TokenKind::Symbol(Symbol::Le),
+            ">"  => TokenKind::Symbol(Symbol::Gt),
+            ">=" => TokenKind::Symbol(Symbol::Ge),
+            "="  => TokenKind::Symbol(Symbol::Assign),
+            "&"  => TokenKind::Symbol(Symbol::Ampersand),
+            ","  => TokenKind::Symbol(Symbol::Comma),
+            ";"  => TokenKind::Symbol(Symbol::Semicolon),
+            "("  => TokenKind::Symbol(Symbol::OpeningParen),
+            ")"  => TokenKind::Symbol(Symbol::ClosingParen),
+            "{"  => TokenKind::Symbol(Symbol::OpeningBrace),
+            "}"  => TokenKind::Symbol(Symbol::ClosingBrace),
+            _    => return self 
+        };
+        Token::new(kind)
+    }
+
+    fn convert_keyword(self) -> Self {
+        let ident = retrieve_ident!(self);
+        let kind = match ident.as_str() {
+            "int"    => TokenKind::Keyword(Keyword::Int),
+            "if"     => TokenKind::Keyword(Keyword::If),
+            "else"   => TokenKind::Keyword(Keyword::Else),
+            "for"    => TokenKind::Keyword(Keyword::For),
+            "while"  => TokenKind::Keyword(Keyword::While),
+            "return" => TokenKind::Keyword(Keyword::Return),
+                   _ => return self 
+        };
+        Token::new(kind)
+    }
+
+    fn convert_reserved(self) -> Self {
+        let mut token = self.convert_symbol();
+        token = token.convert_keyword();
+        token
+    }
+
+    pub fn get_string(&self) -> String {
+        match &self.kind {
+            TokenKind::Ident(s) => s.clone(),
+            TokenKind::Num(n) => n.to_string(),
+            _ => format!("error:{:#?}", self),
+        }
+    }
+
+    pub fn get_num(&self) -> i64 {
+        match self.kind {
+            TokenKind::Num(n) => n,
+            _ => panic!()
+        }
+    }
+
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct Token {
-    pub kind: TokenKind,    // Kind of Token
-    pub val : i64,          // Number literal
-    pub s   : String,       // String of Token
-    pub loc : usize,
-}
-
-fn error_at(lexer: &Lexer, pos: usize, s: &str) {
-    for c in lexer.code.iter() {
-        print!("{}", c);
+impl TokenKind {
+    pub fn is_identifier(&self) -> bool {
+        matches!(self, TokenKind::Ident(_))
     }
-    println!();
 
-    for _ in 0..pos {
-        print!(" ");
+    pub fn is_keyword(&self) -> bool {
+        matches!(self, TokenKind::Keyword(_))
     }
-    print!("^ ");
-    println!("{}", s);
-    process::exit(1);
+
+    pub fn is_num(&self) -> bool {
+        matches!(self, TokenKind::Num(_))
+    }
+
 }
 
 fn ispunct(c: &char) -> bool {
@@ -137,86 +244,72 @@ fn starts_with_reserved(vc: &[char]) -> Option<String> {
     None
 }
 
-pub fn tokenize(lexer: &mut Lexer) -> Vec<Token> {
-    let mut tokens = vec![];
-    while !lexer.is_last() {
-        let mut c = lexer.getc();
-        // Skip whitespace characters.
-        if c.is_whitespace() {
-            lexer.next_pos(1);
-            continue;
-        }
+pub fn error(s: String) {
+    eprintln!("{}", s);
+    process::exit(1);
+}
 
-        // Numeric literal
-        if c.is_ascii_digit() {
-            let kind = TokenKind::Num;
-            let loc = lexer.pos;
-            let val = lexer.strtol();
-            let s = lexer.code[loc..lexer.pos].iter().collect();
-            let token = Token { kind, val, s, loc };
-            tokens.push(token);
-            continue;
-        }
-
-        // Keywords or Multi-letter punctuators
-        if let Some(s) = starts_with_reserved(&lexer.code[lexer.pos..]) {
-            let len = s.len();
-            let token = Token {
-                kind: TokenKind::Reserved,
-                val : 0,
-                s,
-                loc : lexer.pos,
-            };
-            lexer.next_pos(len);
-            tokens.push(token);
-            continue;
-        }
-
-        // Identifier
-        if is_alpha(c) {
-            let mut s = String::new();
-            let loc = lexer.pos;
-            while is_alnum(c) {
-                s.push_str(&c.to_string());
-                lexer.next_pos(1);
-                c = lexer.getc();
+impl Lexer {
+    pub fn tokenize(mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        while !self.is_last() {
+            let mut c = self.getc();
+            // Skip whitespace characters.
+            if c.is_whitespace() {
+                self.next_pos(1);
+                continue;
             }
 
-            let token = Token {
-                kind: TokenKind::Ident,
-                val : 0,
-                s: s,
-                loc
-            };
+            // Numeric literal
+            if c.is_ascii_digit() {
+                let val = self.strtol();
+                let token = Token::new(TokenKind::Num(val));
+                tokens.push(token);
+                continue;
+            }
 
-            tokens.push(token);
-            continue;
+            // Keywords or Multi-letter punctuators
+            if let Some(s) = starts_with_reserved(&self.code[self.pos..]) {
+                let len = s.len();
+                let token = Token::new(TokenKind::Ident(s));
+                self.next_pos(len);
+                tokens.push(token);
+                continue;
+            }
+
+            // Identifier
+            if is_alpha(c) {
+                let mut s = String::new();
+                while is_alnum(c) {
+                    s.push_str(&c.to_string());
+                    self.next_pos(1);
+                    c = self.getc();
+                }
+
+                let token = Token::new(TokenKind::Ident(s));
+
+                tokens.push(token);
+                continue;
+            }
+
+            // Punctuator
+            if ispunct(c) {
+                let token = Token::new(TokenKind::Ident(c.to_string()));
+                self.next_pos(1);
+                tokens.push(token);
+                continue;
+            }
+
+            error(format!("invalid token: {}", c));
         }
 
-        // Punctuator
-        if ispunct(c) {
-            let token = Token {
-                kind: TokenKind::Reserved,
-                val : 0,
-                s   : c.to_string(),
-                loc : lexer.pos,
-            };
-            lexer.next_pos(1);
-            tokens.push(token);
-            continue;
+        tokens.push(Token::new(TokenKind::Eof));
+
+        let mut tokens2 = Vec::new();
+        for t in tokens {
+            tokens2.push(t.convert_reserved());
         }
 
-        error_at(lexer, lexer.pos, "invalid token");
-
+        return tokens2;
     }
-
-    tokens.push(Token {
-        kind: TokenKind::Eof,
-        val : 0,
-        s   : "".to_string(),
-        loc : lexer.pos,
-    });
-
-    return tokens;
-
 }

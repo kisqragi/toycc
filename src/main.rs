@@ -1,7 +1,7 @@
 extern crate toycc;
 
 use toycc::codegen::codegen;
-use toycc::tokenize::{ tokenize, Lexer };
+use toycc::tokenize::Lexer;
 use toycc::parse::parse;
 
 use std::env;
@@ -20,8 +20,8 @@ fn main() {
         process::exit(1);
     }
 
-    let mut lexer = Lexer::new(&args[1]);
-    let tokens = tokenize(&mut lexer);
+    let lexer = Lexer::new(&args[1]);
+    let tokens = lexer.tokenize();
     let mut prog = parse(tokens);
 
     for i in 0..prog.functions.len() {
