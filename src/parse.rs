@@ -376,7 +376,7 @@ fn new_add(mut lhs: Ast, mut rhs: Ast) -> Ast {
     //rhs = add_type(&mut rhs);
 
     // num + num
-    if lhs.is_integer() && rhs.is_integer() {
+    if !lhs.is_pointer() && !rhs.is_pointer() {
         return new_binary(BinaryOp::Add, lhs, rhs);
     }
 
@@ -403,18 +403,18 @@ fn new_sub(mut lhs: Ast, mut rhs: Ast) -> Ast {
     //rhs = add_type(&mut rhs);
 
     // num - num
-    if lhs.is_integer() && rhs.is_integer() {
+    if !lhs.is_pointer() && !rhs.is_pointer() {
         return new_binary(BinaryOp::Sub, lhs, rhs);
     }
 
     // ptr - num
-    if lhs.is_pointer() && rhs.is_integer() {
+    if lhs.is_pointer() && !rhs.is_pointer() {
         rhs = new_binary(BinaryOp::Mul, rhs, Ast::new(AstKind::Num(8)));
         return new_binary(BinaryOp::Sub, lhs, rhs)
     }
 
     // num - ptr (error)
-    if lhs.is_integer() && rhs.is_pointer() {
+    if !lhs.is_pointer() && rhs.is_pointer() {
         eprintln!("invalid operands");
         eprintln!("lhs = {:#?}", lhs);
         eprintln!("rhs = {:#?}", rhs);
@@ -428,23 +428,23 @@ fn new_sub(mut lhs: Ast, mut rhs: Ast) -> Ast {
 
 // add = mul ("+" mul | "-" mul)*
 fn add(pc: &mut ParseContext) -> Ast {
-    let mut Ast = mul(pc);
+    let mut ast = mul(pc);
 
     loop {
         match pc.tokens[pc.pos].kind {
             TokenKind::Symbol(Symbol::Add) => {
                 pc.pos += 1;
                 let rhs = mul(pc);
-                Ast = new_add(Ast, rhs);
+                ast = new_add(ast, rhs);
                 continue;
             }
             TokenKind::Symbol(Symbol::Sub) => {
                 pc.pos += 1;
                 let rhs = mul(pc);
-                Ast = new_sub(Ast, rhs);
+                ast = new_sub(ast, rhs);
                 continue;
             }
-            _ => return Ast
+            _ => return ast
         }
     }
 }

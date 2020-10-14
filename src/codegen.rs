@@ -1,4 +1,4 @@
-use super::ast::{ Ast, AstKind };
+use super::ast::{ Ast, AstKind, BinaryOp };
 use super::parse::Program;
 
 static mut CUR: i64 = 0;
@@ -126,22 +126,7 @@ fn gen_expr(node: Ast, f: &Function) {
     rs = reg(cur-1);
 
     match node.kind {
-        AstKind::Add => {
-            println!("  add {}, {}", rd, rs);
-        }
-        AstKind::Sub => {
-            println!("  sub {}, {}", rd, rs);
-        }
-        AstKind::Mul => {
-            println!("  imul {}, {}", rd, rs);
-        }
-        AstKind::Div => {
-            println!("  mov rax, {}", rd);
-            println!("  cqo");
-            println!("  idiv {}", rs);
-            println!("  mov {}, rax", rd);
-        }
-        AstKind::Equal => {
+       AstKind::Equal => {
             println!("  cmp {}, {}", rd, rs);
             println!("  sete al");
             println!("  movzb {}, al", rd);
@@ -268,7 +253,7 @@ impl Ast {
             AstKind::Num(val) => {
                 println!("  mov {}, {}", reg(get_cur(1)), val);
                 return;
-            }
+            },
             AstKind::Return(funcname, ast) => {
                 ast.codegen();
                 let cur = get_cur(-1);
@@ -276,11 +261,41 @@ impl Ast {
                 println!("  jmp .L.return.{}", funcname);
             },
             AstKind::Block(asts) => {
-                for ast in asts {
-                    ast.codegen();
+                for ast in asts { ast.codegen();
                 }
+            },
+            AstKind::BinaryOp(op, lhs, rhs) => {
+                Self::codegen_binaryop(op, lhs, rhs);
+            },
+            _ => panic!()
+        }
+    }
+
+    pub fn codegen_binaryop(op: BinaryOp, lhs: Box<Ast>, rhs: Box<Ast>) {
+        lhs.codegen();
+        rhs.codegen();
+
+        let cur = get_cur(-1);
+        let rd = reg(cur-2);
+        let rs = reg(cur-1);
+        match op {
+            BinaryOp::Add => {
+                println!("  add {}, {}", rd, rs);
+            }
+            BinaryOp::Sub => {
+                println!("  sub {}, {}", rd, rs);
+            }
+            BinaryOp::Mul => {
+                println!("  imul {}, {}", rd, rs);
+            }
+            BinaryOp::Div => {
+                println!("  mov rax, {}", rd);
+                println!("  cqo");
+                println!("  idiv {}", rs);
+                println!("  mov {}, rax", rd);
             }
             _ => panic!()
         }
     }
 }
+

@@ -1,4 +1,4 @@
-use super::types::Type;
+use super::types::{ Type, TypeKind };
 
 #[derive(Debug)]
 pub struct Ast {
@@ -74,6 +74,11 @@ impl Ast {
     }
 
     pub fn is_pointer(&self) -> bool {
-        matches!(self.kind, AstKind::Num(_))
+        match &self.kind {
+            AstKind::Var { name: _, ty, offset: _ } => {
+                ty.kind.is_pointer()
+            }
+            _ => false
+        }
     }
 }
