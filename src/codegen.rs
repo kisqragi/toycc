@@ -1,9 +1,7 @@
-use super::parse::{ Node, NodeKind, Program, Function };
-static mut CUR: i64 = 0;
-static mut LABELSEQ: usize = 1;
+use super::ast::{ Ast, AstKind };
+use super::parse::Program;
 
-// get_cur(1) => CUR++ (C like)
-// get_cur(-1) => CUR-- (C like)
+static mut CUR: i64 = 0;
 fn get_cur(n: i64) -> usize {
     let t;
     unsafe {
@@ -15,6 +13,21 @@ fn get_cur(n: i64) -> usize {
     }
     t as usize
 }
+
+fn reg(idx: usize) -> String {
+    let r = ["r10", "r11", "r12", "r13", "r14", "r15"];
+    if r.len() <= idx {
+        panic!("register out of range: {}", idx);
+    }
+
+    r[idx].to_string()
+}
+/*
+static mut LABELSEQ: usize = 1;
+
+// get_cur(1) => CUR++ (C like)
+// get_cur(-1) => CUR-- (C like)
+
 
 fn get_labelseq() -> usize {
     unsafe {
@@ -29,21 +42,14 @@ fn argreg(idx: usize) -> String {
     argreg[idx].to_string()
 }
 
-fn reg(idx: usize) -> String {
-    let r = ["r10", "r11", "r12", "r13", "r14", "r15"];
-    if r.len() <= idx {
-        panic!("register out of range: {}", idx);
-    }
 
-    r[idx].to_string()
-}
 
-fn gen_addr(node: Node, f: &Function) {
+fn gen_addr(node: Ast, f: &Function) {
     match node.kind {
-        NodeKind::Var => {
-            println!("  lea {}, [rbp-{}]", reg(get_cur(1)), f.locals[node.var.unwrap()].offset);
+        AstKind::Var{ name,ty, offset } => {
+            println!("  lea {}, [rbp-{}]", reg(get_cur(1)), offset);
         }
-        NodeKind::Deref => {
+        AstKind::Deref => {
             gen_expr(*node.lhs.unwrap(), f);
         }
         _ => {
@@ -63,33 +69,29 @@ fn store() {
     println!("  mov [{}], {}", reg(cur-1), reg(cur-2));
 }
 
-fn gen_expr(node: Node, f: &Function) {
+fn gen_expr(node: Ast, f: &Function) {
     match node.kind {
-        NodeKind::Num => {
-            println!("  mov {}, {}", reg(get_cur(1)), node.val);
-            return;
-        }
-        NodeKind::Var => {
+        AstKind::Var => {
             gen_addr(node, f);
             load();
             return;
         }
-        NodeKind::Assign => {
+        AstKind::Assign => {
             gen_expr(*node.rhs.unwrap(), f);
             gen_addr(*node.lhs.unwrap(), f);
             store();
             return;
         }
-        NodeKind::Deref => {
+        AstKind::Deref => {
             gen_expr(*node.lhs.unwrap(), f);
             load();
             return;
         }
-        NodeKind::Addr => {
+        AstKind::Addr => {
             gen_addr(*node.lhs.unwrap(), f);
             return;
         }
-        NodeKind::Funcall => {
+        AstKind::Funcall => {
             let mut nargs = 0;
             for arg in node.args.unwrap() {
                 gen_expr(*arg, f);
@@ -124,37 +126,37 @@ fn gen_expr(node: Node, f: &Function) {
     rs = reg(cur-1);
 
     match node.kind {
-        NodeKind::Add => {
+        AstKind::Add => {
             println!("  add {}, {}", rd, rs);
         }
-        NodeKind::Sub => {
+        AstKind::Sub => {
             println!("  sub {}, {}", rd, rs);
         }
-        NodeKind::Mul => {
+        AstKind::Mul => {
             println!("  imul {}, {}", rd, rs);
         }
-        NodeKind::Div => {
+        AstKind::Div => {
             println!("  mov rax, {}", rd);
             println!("  cqo");
             println!("  idiv {}", rs);
             println!("  mov {}, rax", rd);
         }
-        NodeKind::Equal => {
+        AstKind::Equal => {
             println!("  cmp {}, {}", rd, rs);
             println!("  sete al");
             println!("  movzb {}, al", rd);
         }
-        NodeKind::Ne => {
+        AstKind::Ne => {
             println!("  cmp {}, {}", rd, rs);
             println!("  setne al");
             println!("  movzb {}, al", rd);
         }
-        NodeKind::Lt => {
+        AstKind::Lt => {
             println!("  cmp {}, {}", rd, rs);
             println!("  setl al");
             println!("  movzb {}, al", rd);
         }
-        NodeKind::Le => {
+        AstKind::Le => {
             println!("  cmp {}, {}", rd, rs);
             println!("  setle al");
             println!("  movzb {}, al", rd);
@@ -163,21 +165,15 @@ fn gen_expr(node: Node, f: &Function) {
     }
 }
 
-fn gen_stmt(node: Node, f: &Function) {
+fn gen_stmt(node: Ast, f: &Function) {
     match node.kind {
-        NodeKind::Return => {
-            gen_expr(*node.lhs.unwrap(), f);
-            let cur = get_cur(-1);
-            println!("  mov rax, {}", reg(cur-1));
-            println!("  jmp .L.return.{}", f.name);
-        }
-        NodeKind::ExprStmt => {
+        AstKind::ExprStmt => {
             gen_expr(*node.lhs.unwrap(), f);
             unsafe {
                 CUR -= 1;
             }
         }
-        NodeKind::If => {
+        AstKind::If => {
             let seq = get_labelseq();            
             if let Some(_) = node.els {
                 gen_expr(*node.cond.unwrap(), f);
@@ -198,7 +194,7 @@ fn gen_stmt(node: Node, f: &Function) {
                 println!(".L.end.{}:", seq);
             }
         }
-        NodeKind::For => {
+        AstKind::For => {
             let seq = get_labelseq();
             if let Some(_) = node.init {
                 gen_stmt(*node.init.unwrap(), f);
@@ -217,49 +213,74 @@ fn gen_stmt(node: Node, f: &Function) {
             println!("  jmp .L.begin.{}", seq);
             println!(".L.end.{}:", seq);
         }
-        NodeKind::Block => {
-            for n in node.body.unwrap() {
-                gen_stmt(*n, f);
-            }
-        }
         _ => panic!("invalid statement")
     }
 }
+*/
 
 pub fn codegen(prog: Program) {
     println!(".intel_syntax noprefix");
-    for f in &prog.functions {
-        println!(".globl {}", f.name);
-        println!("{}:", f.name);
+    for f in prog.functions {
+        f.codegen();
+    }
+}
 
-        // Prologue. r12-r15 are callee-saved registers.
-        println!("  push rbp");
-        println!("  mov rbp, rsp");
-        println!("  sub rsp, {}", f.stack_size);
-        println!("  mov [rsp-8], r12");
-        println!("  mov [rsp-16], r13");
-        println!("  mov [rsp-24], r14");
-        println!("  mov [rsp-32], r15");
+impl Ast {
+    pub fn codegen(self) {
+        match self.kind {
+            AstKind::Funcdef { name, body, params, stack_size } => {
+                println!(".globl {}", name);
+                println!("{}:", name);
 
-        // Save arguments to the stack
-        let mut i = f.params.len();
+                // Prologue. r12-r15 are callee-saved registers.
+                println!("  push rbp");
+                println!("  mov rbp, rsp");
+                println!("  sub rsp, {}", stack_size);
+                println!("  mov [rsp-8], r12");
+                println!("  mov [rsp-16], r13");
+                println!("  mov [rsp-24], r14");
+                println!("  mov [rsp-32], r15");
 
-        for j in 0..f.params.len() {
-            i -= 1;
-            println!("  mov [rbp-{}], {}", f.locals[j].offset, argreg(i))
+                /*
+                // Save arguments to the stack
+                let mut i = f.params.len();
+
+                for j in 0..f.params.len() {
+                    i -= 1;
+                    println!("  mov [rbp-{}], {}", f.locals[j].offset, argreg(i))
+                }
+                */
+
+                // Emit code
+                //gen_stmt(f.node.clone(), &f);
+                body.codegen();
+
+                // Epilogue
+                println!(".L.return.{}:", name);
+                println!("  mov r12, [rsp-8]");
+                println!("  mov r13, [rsp-16]");
+                println!("  mov r14, [rsp-24]");
+                println!("  mov r15, [rsp-32]");
+                println!("  mov rsp, rbp");
+                println!("  pop rbp");
+                println!("  ret");
+            },
+            AstKind::Num(val) => {
+                println!("  mov {}, {}", reg(get_cur(1)), val);
+                return;
+            }
+            AstKind::Return(funcname, ast) => {
+                ast.codegen();
+                let cur = get_cur(-1);
+                println!("  mov rax, {}", reg(cur-1));
+                println!("  jmp .L.return.{}", funcname);
+            },
+            AstKind::Block(asts) => {
+                for ast in asts {
+                    ast.codegen();
+                }
+            }
+            _ => panic!()
         }
-
-        // Emit code
-        gen_stmt(f.node.clone(), &f);
-
-        // Epilogue
-        println!(".L.return.{}:", f.name);
-        println!("  mov r12, [rsp-8]");
-        println!("  mov r13, [rsp-16]");
-        println!("  mov r14, [rsp-24]");
-        println!("  mov r15, [rsp-32]");
-        println!("  mov rsp, rbp");
-        println!("  pop rbp");
-        println!("  ret");
     }
 }

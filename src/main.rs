@@ -24,13 +24,17 @@ fn main() {
     let tokens = lexer.tokenize();
     let mut prog = parse(tokens);
 
+    //println!("{:#?}", prog);
+
     for i in 0..prog.functions.len() {
         let mut offset = 32;
+        /*
         for l in &mut prog.functions[i].locals {
             offset += 8;
             l.offset = offset;
         }
-        prog.functions[i].stack_size = align_to(offset, 16);
+        */
+        //prog.functions[i].stack_size = align_to(offset, 16);
     }
 
     codegen(prog);

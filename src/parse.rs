@@ -1,68 +1,27 @@
+use super::ast::{ Ast, AstKind, UnaryOp, BinaryOp };
 use super::tokenize::{ Token, TokenKind, Keyword, Symbol };
-use super::types::{ Type, add_type, is_integer, ty_int, pointer_to, func_type, copy_type };
+//use super::types::{ Type, add_type, is_integer, ty_int, pointer_to, func_type, copy_type };
+use super::types::{ Type, ty_int, pointer_to, func_type };
 use std::process::exit;
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum NodeKind {
-    Num,        // Integer
-    Add,        // +
-    Sub,        // -
-    Mul,        // *
-    Div,        // /
-    Equal,      // ==
-    Ne,         // !=
-    Lt,         // <
-    Le,         // <=
-    If,         // "if"
-    For,        // "for"
-    Block,      // { ... }
-    ExprStmt,   // Expression statement
-    Return,     // Return statement
-    Assign,     // =
-    Addr,       // &
-    Deref,      // *
-    Var,        // Variable
-    Funcall,    // Function call
-    Null,       // Default value of NodeKind
+fn new_binary(op: BinaryOp, lhs: Ast, rhs: Ast) -> Ast {
+    Ast::new(AstKind::BinaryOp(op, Box::new(lhs), Box::new(rhs)))
 }
 
-impl Default for NodeKind {
-    fn default() -> Self { NodeKind::Null }
+fn new_unary(op: UnaryOp, expr: Ast) -> Ast {
+    Ast::new(AstKind::UnaryOp(op, Box::new(expr)))
 }
 
-#[derive(Debug, Default, PartialEq, Clone)]
-pub struct Node {
-    pub kind: NodeKind,             // Node kind
-    pub ty: Type,                   // Type, e.g. int or pointer to int
-
-    pub lhs: Option<Box<Node>>,     // Left-hand side
-    pub rhs: Option<Box<Node>>,     // Right-hand side
-
-    // "if" or "for" statement
-    pub cond: Option<Box<Node>>,
-    pub then: Option<Box<Node>>,
-    pub els: Option<Box<Node>>,
-    pub init: Option<Box<Node>>,
-    pub inc: Option<Box<Node>>,
-
-    // Block
-    pub body: Option<Vec<Box<Node>>>,
-
-    // Function call
-    pub funcname: String,
-    pub args: Option<Vec<Box<Node>>>,
-
-    pub var: Option<usize>,         // Used if kind == NodeKind::Var
-    pub val: i64,                   // Used if kind == NodeKind::Num
+fn new_num(pc: &mut ParseContext) -> Ast {
+    if pc.tokens[pc.pos].kind.is_num() {
+        let val = pc.tokens[pc.pos].get_num();
+        return Ast { kind: AstKind::Num(val) };
+    }
+    panic!("number expected, but got {}", pc.tokens[pc.pos].get_string());
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct Var {
-    pub name: String,
-    pub ty: Type,
-    pub offset: usize,
-}
 
+/*
 fn find_var(pc: &mut ParseContext) -> Option<usize> {
     for (i, var) in pc.locals.iter().enumerate() {
         if pc.tokens[pc.pos].get_string() == var.name {
@@ -72,55 +31,19 @@ fn find_var(pc: &mut ParseContext) -> Option<usize> {
     None 
 }
 
-fn new_binary(kind: NodeKind, lhs: Box<Node>, rhs: Box<Node>) -> Node {
-    Node {
-        kind,
-        lhs: Some(lhs),
-        rhs: Some(rhs),
-        ..Default::default()
-    }
+
+fn new_var_ast(ty: Type, name: String) -> Ast {
+    Ast::new(AstKind::Var{ ty, name, offset:0 })
 }
 
-fn new_unary(kind: NodeKind, expr: Box<Node>) -> Node {
-    Node {
-        kind,
-        lhs: Some(expr),
-        ..Default::default()
-    }
-}
-
-fn get_number(val: i64) -> Node {
-    Node {
-        kind: NodeKind::Num,
-        val,
-        ..Default::default()
-    }
-}
-
-fn new_num(pc: &mut ParseContext) -> Node {
-    if pc.tokens[pc.pos].kind.is_num() {
-        let val = pc.tokens[pc.pos].get_num();
-        return get_number(val);
-    }
-    panic!("number expected, but got {}", pc.tokens[pc.pos].get_string());
-}
-
-fn new_var_node(var: usize) -> Node {
-    Node {
-        kind: NodeKind::Var,
-        var: Some(var),
-        ..Default::default()
-    }
-}
-
-fn new_lvar_parms(pc: &mut ParseContext, t: Type) {
+fn new_lvar_params(pc: &mut ParseContext, t: Type) {
     let ty = t.clone();
     let name = t.name.unwrap().get_string();
 
     let v = Var {
         name,
         ty,
-        ..Default::default()
+        offset: 0,
     };
     pc.locals.push(v);
 }
@@ -129,11 +52,12 @@ fn new_lvar(pc: &mut ParseContext, ty: Type) -> usize {
     let v = Var {
         name: pc.tokens[pc.pos].get_string(),
         ty,
-        ..Default::default()
+        offset: 0,
     };
     pc.locals.push(v);
     return pc.locals.len()-1;
 }
+*/
 
 
 // stmt = "return" expr ";"
@@ -142,89 +66,91 @@ fn new_lvar(pc: &mut ParseContext, ty: Type) -> usize {
 //      | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //      | "while" "(" expr ")" stmt
 //      | expr-stmt
-fn stmt(pc: &mut ParseContext) -> Node {
+fn stmt(pc: &mut ParseContext) -> Ast {
     match pc.tokens[pc.pos].kind {
         // "return" statement
         TokenKind::Keyword(Keyword::Return) => {
             pc.pos += 1;
-            let lhs = expr(pc);
-            let node = new_unary(NodeKind::Return, Box::new(lhs));
+            let expr = expr(pc);
+            let ast = Ast::new(AstKind::Return(pc.curr_funcname.clone(), Box::new(expr)));
             skip(pc, TokenKind::Symbol(Symbol::Semicolon));
-            return node;
+            return ast;
         }
         // "if" statement
         TokenKind::Keyword(Keyword::If) => {
-            let mut node = Node { kind: NodeKind::If, ..Default::default() };
 
             pc.pos += 1;
             skip(pc, TokenKind::Symbol(Symbol::OpeningParen));
 
             // set cond
             let cond = expr(pc);
-            node.cond = Some(Box::new(cond));
 
             skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
 
             // set then
             let then = stmt(pc);
-            node.then = Some(Box::new(then));
 
             // "else"
+            let mut els = None;
             if pc.tokens[pc.pos].kind == TokenKind::Keyword(Keyword::Else) {
                 pc.pos += 1;
-                let t = stmt(pc);
-                node.els = Some(Box::new(t));
+                els = Some(Box::new(stmt(pc)));
             }
 
-            return node;
+            return Ast::new(
+                AstKind::If {
+                    cond: Box::new(cond),
+                    then: Box::new(then),
+                    els
+                }
+            );
         }
         // "for" statement
         TokenKind::Keyword(Keyword::For) => {
-            let mut node = Node { kind: NodeKind::For, ..Default::default() };
-
             pc.pos += 1;
             skip(pc, TokenKind::Symbol(Symbol::OpeningParen));
 
             // initとincは値を返さない
             // init
+            let mut init = None;
             if pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::Semicolon) {
-                let init = expr(pc);
-                node.init = Some(Box::new(new_unary(NodeKind::ExprStmt, Box::new(init))));
+                init = Some(Box::new(new_unary(UnaryOp::ExprStmt, expr(pc))));
             }
             skip(pc, TokenKind::Symbol(Symbol::Semicolon));
 
             // cond
+            let mut cond = None;
             if pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::Semicolon) {
-                let cond = expr(pc);
-                node.cond = Some(Box::new(cond));
+                cond = Some(Box::new(new_unary(UnaryOp::ExprStmt, expr(pc))));
             }
             skip(pc, TokenKind::Symbol(Symbol::Semicolon));
 
+            let mut inc = None;
             if pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::ClosingParen) {
-                let inc = expr(pc);
-                node.inc = Some(Box::new(new_unary(NodeKind::ExprStmt, Box::new(inc))));
+                inc = Some(Box::new(new_unary(UnaryOp::ExprStmt, expr(pc))));
             }
             skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
 
-            let then = stmt(pc);
-            node.then = Some(Box::new(then));
+            let then = Some(Box::new(stmt(pc)));
 
-            return node;
+            return Ast::new(AstKind::For { init, cond, inc, then });
         }
         // "while" statement
         TokenKind::Keyword(Keyword::While) => {
-            let mut node = Node { kind: NodeKind::For, ..Default::default() };
             pc.pos += 1;
             skip(pc, TokenKind::Symbol(Symbol::OpeningParen));
 
-            let cond = expr(pc);
-            node.cond = Some(Box::new(cond));
+            let cond = Some(Box::new(expr(pc)));
             skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
 
-            let then = stmt(pc);
-            node.then = Some(Box::new(then));
+            let then = Some(Box::new(stmt(pc)));
 
-            return node;
+            return Ast::new(AstKind::For{
+                init: None,
+                inc: None,
+                cond,
+                then
+            });
         }
         // "{...}" compound statement
         TokenKind::Symbol(Symbol::OpeningBrace) => {
@@ -237,56 +163,57 @@ fn stmt(pc: &mut ParseContext) -> Node {
 }
 
 // compound-stmt = (declaration | stmt)* "}"
-fn compound_stmt(pc: &mut ParseContext) -> Node {
-    let mut node = Node { kind: NodeKind::Block, ..Default::default() };
-
-    let mut body: Vec<Box<Node>> = vec![];
+fn compound_stmt(pc: &mut ParseContext) -> Ast {
+    let mut body: Vec<Box<Ast>> = vec![];
     while pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::ClosingBrace) {
         if pc.tokens[pc.pos].kind == TokenKind::Keyword(Keyword::Int) {
-            let mut node = declaration(pc);
-            body.push(Box::new(add_type(&mut node)));
+            let ast = declaration(pc);
+            //body.push(Box::new(add_type(&mut Ast)));
+            body.push(Box::new(ast));
         } else {
-            let mut node = stmt(pc);
-            body.push(Box::new(add_type(&mut node)));
+            let ast = stmt(pc);
+            body.push(Box::new(ast));
+            //body.push(Box::new(add_type(&mut Ast)));
         }
     }
 
-    node.body = Some(body);
     pc.pos += 1;
-    return node;
+    return Ast::new(AstKind::Block(body));
 }
 
 // funcdef = typespec declarator "{" compound-stmt
-fn funcdef(pc: &mut ParseContext) -> Function {
-    pc.locals = Vec::new();
+fn funcdef(pc: &mut ParseContext) -> Ast {
+    //pc.locals = Vec::new();
     let ty = typespec(pc);
     let ty = declarator(pc, ty);
 
     skip(pc, TokenKind::Symbol(Symbol::OpeningBrace));
 
-    for t in ty.params {
-        new_lvar_parms(pc, t);
+    pc.curr_funcname  = ty.name.clone();
+    /*
+    for t in ty.get_params() {
+        new_lvar_params(pc, t);
     }
-    let params = pc.locals.clone();
+    */
+//    let params = pc.locals.clone();
 
-    let node = compound_stmt(pc);
-    let locals = pc.locals.clone();
-
-    Function {
-        name: ty.name.unwrap().get_string(),
-        node,
-        params,
-        locals,
-        ..Default::default()
-    }
+    let ast = compound_stmt(pc);
+//    let locals = pc.locals.clone();
+    Ast::new(AstKind::Funcdef {
+        name: ty.name.clone(),
+        body: Box::new(ast),
+        params: ty.get_params(),
+        stack_size: 32,
+    })
 }
 
 // declaration = typespec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
-fn declaration(pc: &mut ParseContext) -> Node {
+fn declaration(pc: &mut ParseContext) -> Ast {
     let basety = typespec(pc);
 
-    let mut body: Vec<Box<Node>> = vec![];
+    let mut body: Vec<Box<Ast>> = vec![];
     let mut i = 0;
+    /*
     loop {
         if pc.tokens[pc.pos].kind == TokenKind::Symbol(Symbol::Semicolon) {
             skip(pc, TokenKind::Symbol(Symbol::Semicolon));
@@ -305,17 +232,15 @@ fn declaration(pc: &mut ParseContext) -> Node {
         pc.pos += 1;
         if pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::Assign) { continue; }
 
-        let lhs = new_var_node(var);
+        let lhs = new_var_Ast(ty, var);
         pc.pos += 1;
         let rhs = assign(pc);
-        let node = new_binary(NodeKind::Assign, Box::new(lhs), Box::new(rhs));
-        body.push(Box::new(new_unary(NodeKind::ExprStmt, Box::new(node))));
+        let Ast = new_binary(BinaryOp::Assign, lhs, rhs);
+        body.push(Box::new(new_unary(UnaryOp::ExprStmt, Ast)));
     }
+    */
 
-
-    let mut node = Node { kind: NodeKind::Block, ..Default::default() };
-    node.body = Some(body);
-    node
+    return Ast::new(AstKind::Block(body));
 }
 
 // typespec = "int"
@@ -336,7 +261,7 @@ fn declarator(pc: &mut ParseContext, mut ty: Type) -> Type {
     }
 
     let pos = pc.pos;
-    let name = Some(pc.tokens[pos].clone());
+    let name = pc.tokens[pos].get_string();
     pc.pos += 1;
     let mut ty = type_suffix(pc, ty);
     ty.name = name;
@@ -357,12 +282,10 @@ fn type_suffix(pc: &mut ParseContext, mut ty: Type) -> Type {
                 skip(pc, TokenKind::Symbol(Symbol::Comma));
             }
             let basety = typespec(pc);
-            let ty = declarator(pc, basety);
-            params.push(copy_type(ty));
+            params.push(declarator(pc, basety));
         }
 
-        ty = func_type(ty);
-        ty.params = params;
+        ty = func_type(ty, params);
 
         skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
         return ty;
@@ -371,133 +294,127 @@ fn type_suffix(pc: &mut ParseContext, mut ty: Type) -> Type {
 }
 
 // expr-stmt = expr ";"
-fn expr_stmt(pc: &mut ParseContext) -> Node {
-    let lhs = expr(pc);
-    let node = new_unary(NodeKind::ExprStmt, Box::new(lhs));
+fn expr_stmt(pc: &mut ParseContext) -> Ast {
+    let Ast = new_unary(UnaryOp::ExprStmt, expr(pc));
     skip(pc, TokenKind::Symbol(Symbol::Semicolon));
-    node
+    Ast
 }
 
 // expr =  assign
-fn expr(pc: &mut ParseContext) -> Node {
+fn expr(pc: &mut ParseContext) -> Ast {
     assign(pc)
 }
 
 // assign = equality ("=" assign)?
-fn assign(pc: &mut ParseContext) -> Node {
-    let mut node = equality(pc);
+fn assign(pc: &mut ParseContext) -> Ast {
+    let mut Ast = equality(pc);
     if pc.tokens[pc.pos].kind == TokenKind::Symbol(Symbol::Assign) {
         pc.pos += 1;
-        let rhs = assign(pc);
-        node = new_binary(NodeKind::Assign, Box::new(node), Box::new(rhs));  
+        Ast = new_binary(BinaryOp::Assign, Ast, assign(pc));  
     }
 
-    node
+    Ast
 }
 
 // equality = relational ("==" relational | "!=" relational)*
-fn equality(pc: &mut ParseContext) -> Node {
-    let mut node = relational(pc);
+fn equality(pc: &mut ParseContext) -> Ast {
+    let mut Ast = relational(pc);
 
     loop {
         match pc.tokens[pc.pos].kind  {
             TokenKind::Symbol(Symbol::Eq) => {
                 pc.pos += 1;
                 let rhs = relational(pc);
-                node = new_binary(NodeKind::Equal, Box::new(node), Box::new(rhs));
+                Ast = new_binary(BinaryOp::Eq, Ast, rhs);
                 continue;
             }
             TokenKind::Symbol(Symbol::Ne) => {
                 pc.pos += 1;
                 let rhs = relational(pc);
-                node = new_binary(NodeKind::Ne, Box::new(node), Box::new(rhs));
+                Ast = new_binary(BinaryOp::Ne, Ast, rhs);
                 continue;
             }
-            _ => return node
+            _ => return Ast
         }
     }
 
 }
 
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
-fn relational(pc: &mut ParseContext) -> Node {
-    let mut node = add(pc);
+fn relational(pc: &mut ParseContext) -> Ast {
+    let mut Ast = add(pc);
 
     loop {
         match pc.tokens[pc.pos].kind {
             TokenKind::Symbol(Symbol::Lt) => {
                 pc.pos += 1;
-                let rhs = add(pc);
-                node = new_binary(NodeKind::Lt, Box::new(node), Box::new(rhs));
+                Ast = new_binary(BinaryOp::Lt, Ast, add(pc));
                 continue;
             }
             TokenKind::Symbol(Symbol::Le) => {
                 pc.pos += 1;
-                let rhs = add(pc);
-                node = new_binary(NodeKind::Le, Box::new(node), Box::new(rhs));
+                Ast = new_binary(BinaryOp::Le, Ast, add(pc));
                 continue;
             }
             TokenKind::Symbol(Symbol::Gt) => {
                 pc.pos += 1;
-                let rhs = add(pc);
-                node = new_binary(NodeKind::Lt, Box::new(rhs), Box::new(node));
+                Ast = new_binary(BinaryOp::Lt, add(pc), Ast);
                 continue;
             }
             TokenKind::Symbol(Symbol::Ge) => {
                 pc.pos += 1;
-                let rhs = add(pc);
-                node = new_binary(NodeKind::Le, Box::new(rhs), Box::new(node));
+                Ast = new_binary(BinaryOp::Le, add(pc), Ast);
                 continue;
             }
-            _ => return node
+            _ => return Ast
         }
     }
 }
 
-fn new_add(mut lhs: Node, mut rhs: Node) -> Node {
-    lhs = add_type(&mut lhs);
-    rhs = add_type(&mut rhs);
+fn new_add(mut lhs: Ast, mut rhs: Ast) -> Ast {
+    //lhs = add_type(&mut lhs);
+    //rhs = add_type(&mut rhs);
 
     // num + num
-    if is_integer(&lhs.ty) && is_integer(&rhs.ty) {
-        return new_binary(NodeKind::Add, Box::new(lhs.clone()), Box::new(rhs.clone()));
+    if lhs.is_integer() && rhs.is_integer() {
+        return new_binary(BinaryOp::Add, lhs, rhs);
     }
 
-    if lhs.ty.base != None && rhs.ty.base != None {
+    if lhs.is_pointer() && rhs.is_pointer() {
         eprintln!("invalid operands");
         eprintln!("lhs = {:#?}", lhs);
         eprintln!("rhs = {:#?}", rhs);
     }
 
     // Canonicalize `num + ptr` to `ptr + num`.
-    if lhs.ty.base == None && rhs.ty.base != None {
+    if !lhs.is_pointer() && rhs.is_pointer() {
         let tmp = lhs;
         lhs = rhs;
         rhs = tmp;
     }
 
     // ptr + num
-    rhs = new_binary(NodeKind::Mul, Box::new(rhs), Box::new(get_number(8)));
-    new_binary(NodeKind::Add, Box::new(lhs), Box::new(rhs))
+    rhs = new_binary(BinaryOp::Mul, rhs, Ast::new(AstKind::Num(8)));
+    new_binary(BinaryOp::Add, lhs, rhs)
 }
 
-fn new_sub(mut lhs: Node, mut rhs: Node) -> Node {
-    lhs = add_type(&mut lhs);
-    rhs = add_type(&mut rhs);
+fn new_sub(mut lhs: Ast, mut rhs: Ast) -> Ast {
+    //lhs = add_type(&mut lhs);
+    //rhs = add_type(&mut rhs);
 
     // num - num
-    if is_integer(&lhs.ty) && is_integer(&rhs.ty) {
-        return new_binary(NodeKind::Sub, Box::new(lhs.clone()), Box::new(rhs.clone()));
+    if lhs.is_integer() && rhs.is_integer() {
+        return new_binary(BinaryOp::Sub, lhs, rhs);
     }
 
     // ptr - num
-    if lhs.ty.base != None && is_integer(&rhs.ty) {
-        rhs = new_binary(NodeKind::Mul, Box::new(rhs), Box::new(get_number(8)));
-        return new_binary(NodeKind::Sub, Box::new(lhs), Box::new(rhs));
+    if lhs.is_pointer() && rhs.is_integer() {
+        rhs = new_binary(BinaryOp::Mul, rhs, Ast::new(AstKind::Num(8)));
+        return new_binary(BinaryOp::Sub, lhs, rhs)
     }
 
     // num - ptr (error)
-    if lhs.ty.base == None && rhs.ty.base != None {
+    if lhs.is_integer() && rhs.is_pointer() {
         eprintln!("invalid operands");
         eprintln!("lhs = {:#?}", lhs);
         eprintln!("rhs = {:#?}", rhs);
@@ -505,52 +422,50 @@ fn new_sub(mut lhs: Node, mut rhs: Node) -> Node {
 
     // `ptr-ptr` returns the result of `ptr-ptr` divided by its size.
     // The result is a number of elements, but the value can also be negative.
-    lhs = new_binary(NodeKind::Sub, Box::new(lhs), Box::new(rhs));
-    new_binary(NodeKind::Div, Box::new(lhs), Box::new(get_number(8)))
+    lhs = new_binary(BinaryOp::Sub, lhs, rhs);
+    new_binary(BinaryOp::Div, lhs, Ast::new(AstKind::Num(8)))
 }
 
 // add = mul ("+" mul | "-" mul)*
-fn add(pc: &mut ParseContext) -> Node {
-    let mut node = mul(pc);
+fn add(pc: &mut ParseContext) -> Ast {
+    let mut Ast = mul(pc);
 
     loop {
         match pc.tokens[pc.pos].kind {
             TokenKind::Symbol(Symbol::Add) => {
                 pc.pos += 1;
                 let rhs = mul(pc);
-                node = new_add(node, rhs);
+                Ast = new_add(Ast, rhs);
                 continue;
             }
             TokenKind::Symbol(Symbol::Sub) => {
                 pc.pos += 1;
                 let rhs = mul(pc);
-                node = new_sub(node, rhs);
+                Ast = new_sub(Ast, rhs);
                 continue;
             }
-            _ => return node
+            _ => return Ast
         }
     }
 }
 
 // mul = unary ("*" unary | "/" unary)*
-fn mul(pc: &mut ParseContext) -> Node {
-    let mut node = unary(pc);
+fn mul(pc: &mut ParseContext) -> Ast {
+    let mut Ast = unary(pc);
 
     loop {
         match pc.tokens[pc.pos].kind {
             TokenKind::Symbol(Symbol::Asterisk) => {
                 pc.pos += 1;
-                let rhs = unary(pc);
-                node = new_binary(NodeKind::Mul, Box::new(node), Box::new(rhs));
+                Ast = new_binary(BinaryOp::Mul, Ast, unary(pc));
                 continue;
             }
             TokenKind::Symbol(Symbol::Div) => {
                 pc.pos += 1;
-                let rhs = unary(pc);
-                node = new_binary(NodeKind::Div, Box::new(node), Box::new(rhs));
+                Ast = new_binary(BinaryOp::Div, Ast, unary(pc));
                 continue;
             }
-            _ => return node
+            _ => return Ast
         }
 
     }
@@ -558,7 +473,7 @@ fn mul(pc: &mut ParseContext) -> Node {
 
 // unary = ("+" | "-" | "&" | "*")? unary
 //       | primary
-fn unary(pc: &mut ParseContext) -> Node {
+fn unary(pc: &mut ParseContext) -> Ast {
     match pc.tokens[pc.pos].kind {
         TokenKind::Symbol(Symbol::Add) => {
             pc.pos += 1;
@@ -566,30 +481,27 @@ fn unary(pc: &mut ParseContext) -> Node {
         }
         TokenKind::Symbol(Symbol::Sub) => {
             pc.pos += 1;
-            let node = unary(pc);
-            return new_binary(NodeKind::Sub, Box::new(get_number(0)), Box::new(node));
+            return new_binary(BinaryOp::Sub, Ast::new(AstKind::Num(8)), unary(pc));
         }
         TokenKind::Symbol(Symbol::Ampersand) => {
             pc.pos += 1;
-            let node = unary(pc);
-            return new_unary(NodeKind::Addr, Box::new(node));
+            return new_unary(UnaryOp::Addr, unary(pc));
         }
         TokenKind::Symbol(Symbol::Asterisk) => {
             pc.pos += 1;
-            let node = unary(pc);
-            return new_unary(NodeKind::Deref, Box::new(node));
+            return new_unary(UnaryOp::Deref, unary(pc));
         }
         _ => return primary(pc)
     };
 }
 
 // primary   = "(" expr ")" | ident func-args? | num
-fn primary(pc: &mut ParseContext) -> Node {
+fn primary(pc: &mut ParseContext) -> Ast {
     if pc.tokens[pc.pos].kind == TokenKind::Symbol(Symbol::OpeningParen) {
         pc.pos += 1;
-        let node = expr(pc);
+        let Ast = expr(pc);
         skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
-        return node;
+        return Ast;
     }
 
     if pc.tokens[pc.pos].kind.is_identifier() {
@@ -598,6 +510,7 @@ fn primary(pc: &mut ParseContext) -> Node {
             return funcall(pc);
         }
 
+        /*
         // Variable
         let var = find_var(pc);
         if var == None {
@@ -605,39 +518,39 @@ fn primary(pc: &mut ParseContext) -> Node {
             exit(1);
         }
         pc.pos += 1;
-        return new_var_node(var.unwrap());
+        return new_var_Ast(var.unwrap());
+        */
     }
 
-    let node = new_num(pc);
+    let Ast = new_num(pc);
     pc.pos += 1;
-    node
+    Ast
 }
 
 // func-args = "(" (assign ("," assign)*)? ")"
-fn funcall(pc: &mut ParseContext) -> Node {
+fn funcall(pc: &mut ParseContext) -> Ast {
     let start = pc.pos;
     pc.pos += 2;   // eat ident & "("
 
-    let mut args: Vec<Box<Node>> = vec![];
+    let mut args: Vec<Box<Ast>> = vec![];
 
     while pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::ClosingParen) {
         if (pc.pos-2) != start {
             skip(pc, TokenKind::Symbol(Symbol::Comma));
         }
-        let mut node = assign(pc);
-        args.push(Box::new(add_type(&mut node)));
+        let mut Ast = assign(pc);
+        //args.push(Box::new(add_type(&mut Ast)));
+        args.push(Box::new(Ast));
     }
 
     skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
 
-    let node = Node {
-        kind: NodeKind::Funcall,
-        funcname: pc.tokens[start].get_string(),
-        args: Some(args),
-        ..Default::default()
-    };
-
-    node
+    Ast::new(
+        AstKind::Funcall {
+            name: pc.tokens[start].get_string(),
+            args,
+        }
+    )
 }
 
 fn skip(pc: &mut ParseContext, t: TokenKind){
@@ -657,25 +570,17 @@ fn consume(pc: &mut ParseContext, t: TokenKind) -> bool {
     false
 }
 
-
-#[derive(Debug, Default, Clone)] pub struct Function {
-    pub name: String,
-    pub node: Node,
-    pub locals: Vec<Var>,
-    pub params: Vec<Var>,
-    pub stack_size: usize,
-}
-
 #[derive(Debug, Default)]
 pub struct Program {
-    pub functions: Vec<Function>,
+    pub functions: Vec<Ast>,
 }
 
 #[derive(Debug, Default)]
 struct ParseContext {
     tokens: Vec<Token>,
     pos: usize,
-    locals: Vec<Var>,
+    curr_funcname: String,
+    //locals: Vec<Var>,
 }
 
 // program = funcdef*

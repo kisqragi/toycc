@@ -1,18 +1,43 @@
-use super::parse::{ Node, NodeKind::* };
-use super::tokenize::Token;
+//use super::parse::{ Node, NodeKind::* };
+//use super::tokenize::Token;
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Type {
+    pub kind: TypeKind,
+    pub name: String,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TypeKind {
     Int,
-    Ptr,
-    Func,
+    Ptr(Box<Type>),
+    Func {
+        ty: Box<Type>,
+        params: Vec<Type>,
+    },
     _None,   // Default
 }
 
-impl Default for TypeKind { 
-    fn default() -> Self { TypeKind::_None }
+impl TypeKind {
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, TypeKind::Ptr(_))
+    }
 }
 
+impl Type {
+    pub fn new(kind: TypeKind) -> Self {
+        Type { kind, name: "".to_string() }
+    }
+
+    pub fn get_params(self) -> Vec<Type> {
+        match self.kind {
+            TypeKind::Func{ ty: _, params } => { params }
+            _ => panic!()
+        }
+    }
+}
+
+/*
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct Type {
     pub kind: TypeKind,
@@ -31,28 +56,21 @@ pub struct Type {
 pub fn is_integer(ty: &Type) -> bool {
     ty.kind == TypeKind::Int
 }
+*/
 
 pub fn pointer_to(base: Type) -> Type {
-    Type {
-        kind: TypeKind::Ptr,
-        base: Some(Box::new(base)),
-        ..Default::default()
-    }
+    Type::new(TypeKind::Ptr(Box::new(base)))
 }
 
 pub fn ty_int() -> Type {
-    Type {
-        kind: TypeKind::Int,
-        ..Default::default()
-    }
+    Type::new(TypeKind::Int)
 }
 
-pub fn func_type(return_ty: Type) -> Type {
-    Type {
-        kind: TypeKind::Func,
-        return_ty: Some(Box::new(return_ty)),
-        ..Default::default()
-    }
+pub fn func_type(return_ty: Type, params: Vec<Type>) -> Type {
+    Type::new(TypeKind::Func {
+        ty: Box::new(return_ty),
+        params
+    })
 }
 
 pub fn copy_type(ty: Type) -> Type {
@@ -60,6 +78,7 @@ pub fn copy_type(ty: Type) -> Type {
     ret
 }
 
+/*
 pub fn add_type(node: &mut Node) -> Node {
 
     if let Some(n) = &node.lhs { node.lhs = Some(Box::new(add_type(&mut n.as_ref().clone()))); }
@@ -90,3 +109,4 @@ pub fn add_type(node: &mut Node) -> Node {
 
     return node.clone();
 }
+*/
