@@ -28,11 +28,6 @@ pub enum AstKind {
         ty: Type,
         offset: usize,
     },
-    VarDecl {   // Variable
-        name: String,
-        ty: Type,
-        offset: usize,
-    },
     Funcall {   // Function call
         name: String,
         args: Vec<Box<Ast>>,
@@ -98,7 +93,7 @@ impl Ast {
 
     pub fn var_name_cmp(&self, s: &String) -> bool {
         match &self.kind {
-            AstKind::VarDecl{ name, ty: _, offset: _ } => {
+            AstKind::Var { name, ty: _, offset: _ } => {
                 name == s
             }
             _ => panic!()

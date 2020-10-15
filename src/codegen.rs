@@ -232,7 +232,7 @@ impl Ast {
                 println!("  pop rbp");
                 println!("  ret");
             },
-            AstKind::VarDecl { name: _, ty: _, offset } |  AstKind::Var { name: _, ty: _, offset }=> {
+            AstKind::Var { name: _, ty: _, offset }=> {
                 self.gen_addr();
                 load();
                 return;
@@ -332,7 +332,7 @@ impl Ast {
 
     fn gen_addr(&self) {
         match self.kind {
-            AstKind::VarDecl { name: _, ty: _, offset } |  AstKind::Var { name: _, ty: _, offset }=> {
+            AstKind::Var { name: _, ty: _, offset }=> {
                 println!("  lea {}, [rbp-{}]", reg(get_cur(1)), offset);
             }
             _ => panic!("not an lvalue")

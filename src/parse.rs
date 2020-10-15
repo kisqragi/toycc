@@ -4,6 +4,20 @@ use super::tokenize::{ Token, TokenKind, Keyword, Symbol };
 use super::types::{ Type, ty_int, pointer_to, func_type };
 use std::process::exit;
 
+static mut OFFSET: usize = 0;
+
+// Returns an offset that has been increased by n.
+fn get_offset(n: usize) -> usize {
+    unsafe {
+        OFFSET += n;
+        OFFSET 
+    }
+}
+
+fn reset_offset(offset: usize) {
+    unsafe { OFFSET = offset; }
+}
+
 fn new_binary(op: BinaryOp, lhs: Ast, rhs: Ast) -> Ast {
     Ast::new(AstKind::BinaryOp(op, Box::new(lhs), Box::new(rhs)))
 }
@@ -18,15 +32,6 @@ fn new_num(pc: &mut ParseContext) -> Ast {
         return Ast { kind: AstKind::Num(val) };
     }
     panic!("number expected, but got {}", pc.tokens[pc.pos].get_string());
-}
-
-// Returns an offset that has been increased by n.
-fn get_offset(n: usize) -> usize {
-    static mut OFFSET: usize = 32;
-    unsafe {
-        OFFSET += n;
-        OFFSET 
-    }
 }
 
 fn find_var(pc: &ParseContext, name: &String) -> Option<Ast> {
@@ -57,12 +62,12 @@ fn new_var_ast(pc: &mut ParseContext, name: &String) -> Ast {
     }
 }
 
-fn new_vardecl_ast(pc: &mut ParseContext, ty: Type, name: String) -> Ast {
+fn add_var_ast(pc: &mut ParseContext, ty: Type, name: String) -> Ast {
     match var_exists(pc, &name) {
         Some(_) => panic!("redefinition of ‘a’"),
         None => {
             let offset = get_offset(8);
-            let ast = Ast::new(AstKind::VarDecl { 
+            let ast = Ast::new(AstKind::Var { 
                 ty, name, offset 
             });
             pc.locals.push(ast.clone());
@@ -194,7 +199,8 @@ fn compound_stmt(pc: &mut ParseContext) -> Ast {
 
 // funcdef = typespec declarator "{" compound-stmt
 fn funcdef(pc: &mut ParseContext) -> Ast {
-    //pc.locals = Vec::new();
+    pc.locals = Vec::new();
+    reset_offset(32);
     let ty = typespec(pc);
     let ty = declarator(pc, ty);
 
@@ -236,7 +242,7 @@ fn declaration(pc: &mut ParseContext) -> Ast {
         i += 1;
 
         let ty = declarator(pc, basety.clone());
-        let lhs = new_vardecl_ast(pc, ty, pc.tokens[pc.pos-1].get_string());
+        let lhs = add_var_ast(pc, ty, pc.tokens[pc.pos-1].get_string());
 
         if pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::Assign) { continue; }
 
