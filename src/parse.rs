@@ -451,21 +451,21 @@ fn add(pc: &mut ParseContext) -> Ast {
 
 // mul = unary ("*" unary | "/" unary)*
 fn mul(pc: &mut ParseContext) -> Ast {
-    let mut Ast = unary(pc);
+    let mut ast = unary(pc);
 
     loop {
         match pc.tokens[pc.pos].kind {
             TokenKind::Symbol(Symbol::Asterisk) => {
                 pc.pos += 1;
-                Ast = new_binary(BinaryOp::Mul, Ast, unary(pc));
+                ast = new_binary(BinaryOp::Mul, ast, unary(pc));
                 continue;
             }
             TokenKind::Symbol(Symbol::Div) => {
                 pc.pos += 1;
-                Ast = new_binary(BinaryOp::Div, Ast, unary(pc));
+                ast = new_binary(BinaryOp::Div, ast, unary(pc));
                 continue;
             }
-            _ => return Ast
+            _ => return ast
         }
 
     }
@@ -481,7 +481,7 @@ fn unary(pc: &mut ParseContext) -> Ast {
         }
         TokenKind::Symbol(Symbol::Sub) => {
             pc.pos += 1;
-            return new_binary(BinaryOp::Sub, Ast::new(AstKind::Num(8)), unary(pc));
+            return new_binary(BinaryOp::Sub, Ast::new(AstKind::Num(0)), unary(pc));
         }
         TokenKind::Symbol(Symbol::Ampersand) => {
             pc.pos += 1;
