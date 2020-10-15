@@ -20,45 +20,56 @@ fn new_num(pc: &mut ParseContext) -> Ast {
     panic!("number expected, but got {}", pc.tokens[pc.pos].get_string());
 }
 
+// Returns an offset that has been increased by n.
+fn get_offset(n: usize) -> usize {
+    static mut OFFSET: usize = 32;
+    unsafe {
+        OFFSET += n;
+        OFFSET 
+    }
+}
 
-/*
-fn find_var(pc: &mut ParseContext) -> Option<usize> {
-    for (i, var) in pc.locals.iter().enumerate() {
-        if pc.tokens[pc.pos].get_string() == var.name {
-            return Some(i);
+fn find_var(pc: &ParseContext, name: &String) -> Option<Ast> {
+    for var in &pc.locals {
+        if var.var_name_cmp(name) {
+            return Some(var.clone());
         }
     }
     None 
 }
 
-
-fn new_var_ast(ty: Type, name: String) -> Ast {
-    Ast::new(AstKind::Var{ ty, name, offset:0 })
+fn var_exists(pc: &ParseContext, name: &String) -> Option<usize> {
+    for var in &pc.locals {
+        if pc.tokens[pc.pos].get_string() == *name {
+            return Some(var.get_var_offset());
+        }
+    }
+    None 
 }
 
-fn new_lvar_params(pc: &mut ParseContext, t: Type) {
-    let ty = t.clone();
-    let name = t.name.unwrap().get_string();
-
-    let v = Var {
-        name,
-        ty,
-        offset: 0,
-    };
-    pc.locals.push(v);
+fn new_var_ast(pc: &mut ParseContext, name: &String) -> Ast {
+    match find_var(pc, &name) {
+        Some(var) => var, 
+        None => {
+            eprintln!("undefined variable: {}", name);
+            exit(1);
+        }
+    }
 }
 
-fn new_lvar(pc: &mut ParseContext, ty: Type) -> usize {
-    let v = Var {
-        name: pc.tokens[pc.pos].get_string(),
-        ty,
-        offset: 0,
-    };
-    pc.locals.push(v);
-    return pc.locals.len()-1;
+fn new_vardecl_ast(pc: &mut ParseContext, ty: Type, name: String) -> Ast {
+    match var_exists(pc, &name) {
+        Some(_) => panic!("redefinition of ‘a’"),
+        None => {
+            let offset = get_offset(8);
+            let ast = Ast::new(AstKind::VarDecl { 
+                ty, name, offset 
+            });
+            pc.locals.push(ast.clone());
+            ast
+        }
+    }
 }
-*/
-
 
 // stmt = "return" expr ";"
 //      | "{" compound-stmt
@@ -203,7 +214,7 @@ fn funcdef(pc: &mut ParseContext) -> Ast {
         name: ty.name.clone(),
         body: Box::new(ast),
         params: ty.get_params(),
-        stack_size: 32,
+        stack_size: get_offset(0),
     })
 }
 
@@ -213,7 +224,6 @@ fn declaration(pc: &mut ParseContext) -> Ast {
 
     let mut body: Vec<Box<Ast>> = vec![];
     let mut i = 0;
-    /*
     loop {
         if pc.tokens[pc.pos].kind == TokenKind::Symbol(Symbol::Semicolon) {
             skip(pc, TokenKind::Symbol(Symbol::Semicolon));
@@ -226,19 +236,15 @@ fn declaration(pc: &mut ParseContext) -> Ast {
         i += 1;
 
         let ty = declarator(pc, basety.clone());
-        pc.pos -= 1;
-        let var = new_lvar(pc, ty);
+        let lhs = new_vardecl_ast(pc, ty, pc.tokens[pc.pos-1].get_string());
 
-        pc.pos += 1;
         if pc.tokens[pc.pos].kind != TokenKind::Symbol(Symbol::Assign) { continue; }
 
-        let lhs = new_var_Ast(ty, var);
         pc.pos += 1;
         let rhs = assign(pc);
-        let Ast = new_binary(BinaryOp::Assign, lhs, rhs);
-        body.push(Box::new(new_unary(UnaryOp::ExprStmt, Ast)));
+        let ast = new_binary(BinaryOp::Assign, lhs, rhs);
+        body.push(Box::new(new_unary(UnaryOp::ExprStmt, ast)));
     }
-    */
 
     return Ast::new(AstKind::Block(body));
 }
@@ -295,9 +301,9 @@ fn type_suffix(pc: &mut ParseContext, mut ty: Type) -> Type {
 
 // expr-stmt = expr ";"
 fn expr_stmt(pc: &mut ParseContext) -> Ast {
-    let Ast = new_unary(UnaryOp::ExprStmt, expr(pc));
+    let ast = new_unary(UnaryOp::ExprStmt, expr(pc));
     skip(pc, TokenKind::Symbol(Symbol::Semicolon));
-    Ast
+    ast
 }
 
 // expr =  assign
@@ -307,13 +313,13 @@ fn expr(pc: &mut ParseContext) -> Ast {
 
 // assign = equality ("=" assign)?
 fn assign(pc: &mut ParseContext) -> Ast {
-    let mut Ast = equality(pc);
+    let mut ast = equality(pc);
     if pc.tokens[pc.pos].kind == TokenKind::Symbol(Symbol::Assign) {
         pc.pos += 1;
-        Ast = new_binary(BinaryOp::Assign, Ast, assign(pc));  
+        ast = new_binary(BinaryOp::Assign, ast, assign(pc));  
     }
 
-    Ast
+    ast
 }
 
 // equality = relational ("==" relational | "!=" relational)*
@@ -499,9 +505,9 @@ fn unary(pc: &mut ParseContext) -> Ast {
 fn primary(pc: &mut ParseContext) -> Ast {
     if pc.tokens[pc.pos].kind == TokenKind::Symbol(Symbol::OpeningParen) {
         pc.pos += 1;
-        let Ast = expr(pc);
+        let ast = expr(pc);
         skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
-        return Ast;
+        return ast;
     }
 
     if pc.tokens[pc.pos].kind.is_identifier() {
@@ -510,21 +516,15 @@ fn primary(pc: &mut ParseContext) -> Ast {
             return funcall(pc);
         }
 
-        /*
         // Variable
-        let var = find_var(pc);
-        if var == None {
-            eprintln!("undefined variable: {}", pc.tokens[pc.pos].get_string());
-            exit(1);
-        }
+        let ident = pc.tokens[pc.pos].get_string();
         pc.pos += 1;
-        return new_var_Ast(var.unwrap());
-        */
+        return new_var_ast(pc, &ident);
     }
 
-    let Ast = new_num(pc);
+    let ast = new_num(pc);
     pc.pos += 1;
-    Ast
+    ast
 }
 
 // func-args = "(" (assign ("," assign)*)? ")"
@@ -538,9 +538,9 @@ fn funcall(pc: &mut ParseContext) -> Ast {
         if (pc.pos-2) != start {
             skip(pc, TokenKind::Symbol(Symbol::Comma));
         }
-        let mut Ast = assign(pc);
+        let mut ast = assign(pc);
         //args.push(Box::new(add_type(&mut Ast)));
-        args.push(Box::new(Ast));
+        args.push(Box::new(ast));
     }
 
     skip(pc, TokenKind::Symbol(Symbol::ClosingParen));
@@ -580,7 +580,7 @@ struct ParseContext {
     tokens: Vec<Token>,
     pos: usize,
     curr_funcname: String,
-    //locals: Vec<Var>,
+    locals: Vec<Ast>,
 }
 
 // program = funcdef*

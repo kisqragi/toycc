@@ -1,11 +1,11 @@
-use super::types::{ Type, TypeKind };
+use super::types::Type;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Ast {
     pub kind: AstKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstKind {
     Num(i64),
     UnaryOp(UnaryOp, Box<Ast>),
@@ -24,6 +24,11 @@ pub enum AstKind {
     Block(Vec<Box<Ast>>),  // {...}
     Return(String, Box<Ast>),     // Return statement
     Var {   // Variable
+        name: String,
+        ty: Type,
+        offset: usize,
+    },
+    VarDecl {   // Variable
         name: String,
         ty: Type,
         offset: usize,
@@ -79,6 +84,24 @@ impl Ast {
                 ty.kind.is_pointer()
             }
             _ => false
+        }
+    }
+
+    pub fn get_var_offset(&self) -> usize {
+        match self.kind {
+            AstKind::Var { name: _, ty: _, offset } => {
+                offset
+            }
+            _ => panic!("error by get_var_offset")
+        }
+    }
+
+    pub fn var_name_cmp(&self, s: &String) -> bool {
+        match &self.kind {
+            AstKind::VarDecl{ name, ty: _, offset: _ } => {
+                name == s
+            }
+            _ => panic!()
         }
     }
 }

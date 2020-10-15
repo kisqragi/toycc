@@ -62,24 +62,24 @@ assert 0 'int main() { return 0 >= 1; }'
 assert 1 'int main() { return 1 >= 1; }'
 assert 1 'int main() { return 2 >= 1; }'
 
-#assert 1 'int main() { return 1; 2; 3; }'
-#assert 2 'int main() { 1; return 2; 3; }'
-#assert 3 'int main() { 1; 2; return 3; }'
-#
-#assert 3 'int main() { int a=3; return a; }'
-#assert 5 'int main() { int a=3; a=5; return a; }'
-#assert 3 'int main() { int k = 3; return k; }'
-#assert 8 'int main() { int a=3; int z=5; return a+z; }'
-#assert 6 'int main() { int a; int b; a=b=3; return a+b; }'
-#
-#assert 3 'int main() { int foo=3; return foo; }'
-#assert 7 'int main() { int foo=3; int hoge=4; return foo+hoge; }'
-#assert 1 'int main() { int foo=3; int hoge=4; return hoge-foo; }'
-#assert 2 'int main() { int foo=5; int hoge=3; return foo-hoge; }'
-#
-#assert 123 'int main() { int foo123=123; return foo123; }'
-#assert 1 'int main() { int _foo=1; return _foo; }'
-#
+assert 1 'int main() { return 1; 2; 3; }'
+assert 2 'int main() { 1; return 2; 3; }'
+assert 3 'int main() { 1; 2; return 3; }'
+
+assert 3 'int main() { int a=3; return a; }'
+assert 5 'int main() { int a=3; a=5; return a; }'
+assert 3 'int main() { int k = 3; return k; }'
+assert 8 'int main() { int a=3; int z=5; return a+z; }'
+assert 6 'int main() { int a; int b; a=b=3; return a+b; }'
+
+assert 3 'int main() { int foo=3; return foo; }'
+assert 7 'int main() { int foo=3; int hoge=4; return foo+hoge; }'
+assert 1 'int main() { int foo=3; int hoge=4; return hoge-foo; }'
+assert 2 'int main() { int foo=5; int hoge=3; return foo-hoge; }'
+
+assert 123 'int main() { int foo123=123; return foo123; }'
+assert 1 'int main() { int _foo=1; return _foo; }'
+
 #assert 3 'int main() { if (0) return 2; return 3; }'
 #assert 3 'int main() { if (1-1) return 2; return 3; }'
 #assert 2 'int main() { if (1) return 2; return 3; }'

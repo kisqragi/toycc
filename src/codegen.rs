@@ -1,4 +1,4 @@
-use super::ast::{ Ast, AstKind, BinaryOp };
+use super::ast::{ Ast, AstKind, BinaryOp, UnaryOp };
 use super::parse::Program;
 
 static mut CUR: i64 = 0;
@@ -22,6 +22,18 @@ fn reg(idx: usize) -> String {
 
     r[idx].to_string()
 }
+
+fn load() {
+    let cur = get_cur(0)-1;
+    println!("  mov {}, [{}]", reg(cur), reg(cur));
+}
+
+fn store() {
+    let cur = get_cur(-1);
+    println!("  mov [{}], {}", reg(cur-1), reg(cur-2));
+}
+
+
 /*
 static mut LABELSEQ: usize = 1;
 
@@ -57,16 +69,6 @@ fn gen_addr(node: Ast, f: &Function) {
             panic!("not an lvalue");
         }
     }
-}
-
-fn load() {
-    let cur = get_cur(0)-1;
-    println!("  mov {}, [{}]", reg(cur), reg(cur));
-}
-
-fn store() {
-    let cur = get_cur(-1);
-    println!("  mov [{}], {}", reg(cur-1), reg(cur-2));
 }
 
 fn gen_expr(node: Ast, f: &Function) {
@@ -230,6 +232,11 @@ impl Ast {
                 println!("  pop rbp");
                 println!("  ret");
             },
+            AstKind::VarDecl { name: _, ty: _, offset } |  AstKind::Var { name: _, ty: _, offset }=> {
+                self.gen_addr();
+                load();
+                return;
+            }
             AstKind::Num(val) => {
                 println!("  mov {}, {}", reg(get_cur(1)), val);
                 return;
@@ -247,17 +254,32 @@ impl Ast {
             AstKind::BinaryOp(op, lhs, rhs) => {
                 Self::codegen_binaryop(op, lhs, rhs);
             },
+            AstKind::UnaryOp(op, ast) => {
+                Self::codegen_unaryop(op, ast);
+            },
             _ => panic!()
         }
     }
 
     pub fn codegen_binaryop(op: BinaryOp, lhs: Box<Ast>, rhs: Box<Ast>) {
+
+        match op {
+            BinaryOp::Assign => {
+                rhs.codegen();
+                lhs.gen_addr();
+                store();
+                return;
+            }
+            _ => ()
+        }
+
         lhs.codegen();
         rhs.codegen();
 
         let cur = get_cur(-1);
         let rd = reg(cur-2);
         let rs = reg(cur-1);
+
         match op {
             BinaryOp::Add => {
                 println!("  add {}, {}", rd, rs);
@@ -297,5 +319,25 @@ impl Ast {
             _ => panic!()
         }
     }
+
+    pub fn codegen_unaryop(op: UnaryOp, ast: Box<Ast>) {
+        match op {
+            UnaryOp::ExprStmt => {
+                ast.codegen();
+                get_cur(-1);
+            }
+            _ => panic!()
+        }
+    }
+
+    fn gen_addr(&self) {
+        match self.kind {
+            AstKind::VarDecl { name: _, ty: _, offset } |  AstKind::Var { name: _, ty: _, offset }=> {
+                println!("  lea {}, [rbp-{}]", reg(get_cur(1)), offset);
+            }
+            _ => panic!("not an lvalue")
+        }
+    }
+
 }
 
