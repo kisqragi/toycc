@@ -318,23 +318,23 @@ fn assign(pc: &mut ParseContext) -> Ast {
 
 // equality = relational ("==" relational | "!=" relational)*
 fn equality(pc: &mut ParseContext) -> Ast {
-    let mut Ast = relational(pc);
+    let mut ast = relational(pc);
 
     loop {
         match pc.tokens[pc.pos].kind  {
             TokenKind::Symbol(Symbol::Eq) => {
                 pc.pos += 1;
                 let rhs = relational(pc);
-                Ast = new_binary(BinaryOp::Eq, Ast, rhs);
+                ast = new_binary(BinaryOp::Eq, ast, rhs);
                 continue;
             }
             TokenKind::Symbol(Symbol::Ne) => {
                 pc.pos += 1;
                 let rhs = relational(pc);
-                Ast = new_binary(BinaryOp::Ne, Ast, rhs);
+                ast = new_binary(BinaryOp::Ne, ast, rhs);
                 continue;
             }
-            _ => return Ast
+            _ => return ast
         }
     }
 
@@ -342,31 +342,31 @@ fn equality(pc: &mut ParseContext) -> Ast {
 
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
 fn relational(pc: &mut ParseContext) -> Ast {
-    let mut Ast = add(pc);
+    let mut ast = add(pc);
 
     loop {
         match pc.tokens[pc.pos].kind {
             TokenKind::Symbol(Symbol::Lt) => {
                 pc.pos += 1;
-                Ast = new_binary(BinaryOp::Lt, Ast, add(pc));
+                ast = new_binary(BinaryOp::Lt, ast, add(pc));
                 continue;
             }
             TokenKind::Symbol(Symbol::Le) => {
                 pc.pos += 1;
-                Ast = new_binary(BinaryOp::Le, Ast, add(pc));
+                ast = new_binary(BinaryOp::Le, ast, add(pc));
                 continue;
             }
             TokenKind::Symbol(Symbol::Gt) => {
                 pc.pos += 1;
-                Ast = new_binary(BinaryOp::Lt, add(pc), Ast);
+                ast = new_binary(BinaryOp::Lt, add(pc), ast);
                 continue;
             }
             TokenKind::Symbol(Symbol::Ge) => {
                 pc.pos += 1;
-                Ast = new_binary(BinaryOp::Le, add(pc), Ast);
+                ast = new_binary(BinaryOp::Le, add(pc), ast);
                 continue;
             }
-            _ => return Ast
+            _ => return ast
         }
     }
 }

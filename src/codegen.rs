@@ -126,27 +126,7 @@ fn gen_expr(node: Ast, f: &Function) {
     rs = reg(cur-1);
 
     match node.kind {
-       AstKind::Equal => {
-            println!("  cmp {}, {}", rd, rs);
-            println!("  sete al");
-            println!("  movzb {}, al", rd);
-        }
-        AstKind::Ne => {
-            println!("  cmp {}, {}", rd, rs);
-            println!("  setne al");
-            println!("  movzb {}, al", rd);
-        }
-        AstKind::Lt => {
-            println!("  cmp {}, {}", rd, rs);
-            println!("  setl al");
-            println!("  movzb {}, al", rd);
-        }
-        AstKind::Le => {
-            println!("  cmp {}, {}", rd, rs);
-            println!("  setle al");
-            println!("  movzb {}, al", rd);
-        }
-        _ => panic!("invalid expression")
+       _ => panic!("invalid expression")
     }
 }
 
@@ -293,6 +273,26 @@ impl Ast {
                 println!("  cqo");
                 println!("  idiv {}", rs);
                 println!("  mov {}, rax", rd);
+            }
+            BinaryOp::Eq => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  sete al");
+                println!("  movzb {}, al", rd);
+            }
+            BinaryOp::Ne => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  setne al");
+                println!("  movzb {}, al", rd);
+            }
+            BinaryOp::Lt => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  setl al");
+                println!("  movzb {}, al", rd);
+            }
+            BinaryOp::Le => {
+                println!("  cmp {}, {}", rd, rs);
+                println!("  setle al");
+                println!("  movzb {}, al", rd);
             }
             _ => panic!()
         }
